@@ -8,7 +8,7 @@ Add Claude Opus as a third reviewer to the debate plugin, using the `claude` CLI
 
 ## Files to Create/Modify
 
-```
+```text
 reviewers/
   codex.md       — update prompt for Executor persona
   gemini.md      — update prompt for Architect persona
@@ -152,8 +152,8 @@ jq -r '.result // ""' {json_file}
 Direct mirror of `codex-review.md` with:
 - Model: `claude-opus-4-6` (override via argument, e.g. `/debate:opus-review claude-opus-4-5`)
 - Persona: The Skeptic (full prompt in the review call)
-- Temp files: `opus-output.md`, `opus-stderr.txt`, `opus-exit.txt`
-- Session ID: captured from stderr after round 1, used for resume rounds 2–5
+- Temp files: `opus-raw.json`, `opus-output.md`, `opus-exit.txt`
+- Session ID: captured from `--output-format json` stdout (`.session_id` field via jq), used for resume rounds 2–5
 - Fallback: fresh call if resume fails, recapture session ID
 - Max 5 rounds
 - `allowed-tools` frontmatter: add `Bash(claude -p:*)`, `Bash(claude --resume:*)`
@@ -166,7 +166,7 @@ Direct mirror of `codex-review.md` with:
 
 Add `which claude` to the availability check. Display three-way status:
 
-```
+```text
 Reviewers found:
   ✅ codex    (OpenAI Codex)
   ✅ gemini   (Google Gemini)
@@ -178,8 +178,8 @@ Fewer-than-2 guard still applies. Debate phase requires ≥2 reviewers.
 ### 1c. Temp files
 
 Add:
+- Opus raw JSON: `/tmp/ai-review-${REVIEW_ID}/opus-raw.json`
 - Opus output: `/tmp/ai-review-${REVIEW_ID}/opus-output.md`
-- Opus stderr: `/tmp/ai-review-${REVIEW_ID}/opus-stderr.txt`
 - Opus exit code: `/tmp/ai-review-${REVIEW_ID}/opus-exit.txt`
 
 ### Runner script — Opus block
@@ -286,7 +286,7 @@ Add to the printed snippet AND the frontmatter `allowed-tools`:
 ### Step 6: Summary
 
 Add Claude Opus to the final status block:
-```
+```text
   Codex:   ✅ ready (v0.x.x, API key set)
   Gemini:  ✅ ready (authenticated)
   Claude:  ✅ ready (v1.x.x)

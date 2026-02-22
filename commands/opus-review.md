@@ -91,7 +91,7 @@ Unset nested-session guard, then run Claude in non-interactive mode with `--outp
 ```bash
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
-  --model $MODEL \
+  --model "$MODEL" \
   --tools "" \
   --disable-slash-commands \
   --strict-mcp-config \
@@ -199,6 +199,8 @@ unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 OPUS_EXIT=$?
 jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
   > /tmp/ai-review-${REVIEW_ID}/opus-output.md
+NEW_SID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)
+[ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
 ```
 
 **If `OPUS_SESSION_ID` is empty or resume fails (non-zero exit):**

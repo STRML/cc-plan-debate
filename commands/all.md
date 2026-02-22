@@ -25,7 +25,7 @@ which jq
 
 Build `AVAILABLE_REVIEWERS` from the results. Display a prerequisite summary:
 
-```
+```text
 ## AI Review — Prerequisite Check
 
 Reviewers found:
@@ -113,7 +113,7 @@ If there is no plan in the current context, ask the user to paste it or describe
 
 ### 1e. Announce
 
-```
+```text
 Running parallel review with: codex, gemini, claude
 Timeout per reviewer: 120s
 ```
@@ -190,7 +190,7 @@ fi
 if which claude > /dev/null 2>&1 && which jq > /dev/null 2>&1; then
   (
     unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-    CLAUDE_CODE_SIMPLE=1 "${TIMEOUT_CMD[@]}" claude -p \
+    "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
       --model claude-opus-4-6 \
       --tools "" \
       --disable-slash-commands \
@@ -369,15 +369,17 @@ DEBATE_PROMPT=$(cat /tmp/ai-review-${REVIEW_ID}/gemini-debate-prompt.txt)
 DEBATE_PROMPT=$(cat /tmp/ai-review-${REVIEW_ID}/opus-debate-prompt.txt)
 if [ -n "$OPUS_SESSION_ID" ]; then
   unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-  CLAUDE_CODE_SIMPLE=1 "${TIMEOUT_CMD[@]}" claude --resume "$OPUS_SESSION_ID" -p "$DEBATE_PROMPT" \
+  "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" -p "$DEBATE_PROMPT" \
     --tools "" --disable-slash-commands --strict-mcp-config \
     --settings '{"disableAllHooks":true}' --output-format json \
     > /tmp/ai-review-${REVIEW_ID}/opus-debate-raw.json
   jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-debate-raw.json
+  NEW_SID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-debate-raw.json)
+  [ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
 else
   # Fall back to fresh call; recapture OPUS_SESSION_ID from .session_id
   unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-  CLAUDE_CODE_SIMPLE=1 "${TIMEOUT_CMD[@]}" claude -p \
+  "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
     --model claude-opus-4-6 \
     --tools "" --disable-slash-commands --strict-mcp-config \
     --settings '{"disableAllHooks":true}' --output-format json \

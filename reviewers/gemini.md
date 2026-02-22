@@ -50,7 +50,7 @@ Use this explicit index for resume — do NOT use `--resume latest` which is rac
 ## Session Resume
 
 ```bash
-gemini --resume {session_index} -p "{prompt}" --approval-mode=plan 2>&1
+gemini --resume {session_index} -p "{prompt}" -s -e "" 2>&1
 ```
 
 ## Output

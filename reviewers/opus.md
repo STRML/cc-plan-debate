@@ -40,7 +40,7 @@ session ID (`.session_id`). No stderr output in this mode.
 
 ```bash
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-CLAUDE_CODE_SIMPLE=1 "${TIMEOUT_CMD[@]}" claude -p \
+"${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
   --model {model} \
   --tools "" \
   --disable-slash-commands \
@@ -91,14 +91,17 @@ fi
 
 ```bash
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-CLAUDE_CODE_SIMPLE=1 "${TIMEOUT_CMD[@]}" claude --resume "$OPUS_SESSION_ID" -p "{prompt}" \
+"${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" -p "{prompt}" \
   --tools "" \
   --disable-slash-commands \
   --strict-mcp-config \
   --settings '{"disableAllHooks":true}' \
   --output-format json \
   > {json_file}
+RESUME_EXIT=$?
 jq -r '.result // ""' {json_file}
+NEW_SID=$(jq -r '.session_id // ""' {json_file})
+[ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
 ```
 
 If resume fails (non-zero exit or empty output), fall back to a fresh call and

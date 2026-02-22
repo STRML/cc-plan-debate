@@ -214,6 +214,14 @@ else
     --settings '{"disableAllHooks":true}' \
     --output-format json \
     > /tmp/ai-review-${REVIEW_ID}/opus-raw.json
+  FRESH_EXIT=$?
+  if [ "$FRESH_EXIT" -eq 124 ]; then
+    echo "Warning: Opus fresh call timed out — stopping."
+    rm -rf /tmp/ai-review-${REVIEW_ID}; exit 1
+  elif [ "$FRESH_EXIT" -ne 0 ]; then
+    echo "Warning: Opus fresh call failed (exit $FRESH_EXIT) — stopping."
+    rm -rf /tmp/ai-review-${REVIEW_ID}; exit 1
+  fi
   jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
     > /tmp/ai-review-${REVIEW_ID}/opus-output.md
   OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)

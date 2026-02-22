@@ -115,4 +115,4 @@ recapture `OPUS_SESSION_ID` from the new `.session_id` field.
 
 - Initial review: `.result` extracted from JSON via jq → `{output_file}`
 - Session ID: `.session_id` extracted from JSON via jq → stored in var
-- Resume output: `.result` extracted from JSON via jq → stdout
+- Resume output: `.result` extracted from JSON via jq → `{output_file}`

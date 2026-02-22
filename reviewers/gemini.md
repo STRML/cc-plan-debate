@@ -19,22 +19,24 @@ which gemini
 
 ## Initial Review
 
-Plan content is passed via stdin pipe — never inlined in the shell command string.
+Plan content is passed via stdin redirect — never inlined in the shell command string.
 The `-p` prompt contains only fixed instruction text.
 
 ```bash
-cat {plan_file} | gemini \
-  -p "Review this implementation plan (provided via stdin). Focus on:
-1. Correctness - Will this plan achieve the stated goals?
-2. Risks - What could go wrong? Edge cases? Data loss?
-3. Missing steps - Is anything forgotten?
-4. Alternatives - Is there a simpler or better approach?
-5. Security - Any security concerns?
+gemini \
+  -p "You are The Architect — a systems architect reviewing for structural integrity. Review this implementation plan (provided via stdin). Think big picture before line-by-line. Focus on:
+1. Approach validity — is this the right solution to the actual problem?
+2. Over-engineering — what could be simplified or removed?
+3. Missing phases — is anything structurally absent from the flow?
+4. Graceful degradation — does the design hold when parts fail?
+5. Alternatives — is there a meaningfully better approach?
 
 Be specific and actionable. If the plan is solid, end with: VERDICT: APPROVED
 If changes are needed, end with: VERDICT: REVISE" \
   -m {model} \
-  --approval-mode=plan \
+  -s \
+  -e "" \
+  < {plan_file} \
   > {output_file}
 ```
 

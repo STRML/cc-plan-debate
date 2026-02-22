@@ -76,7 +76,12 @@ Be specific and actionable. If the plan is solid and ready to implement, end you
 If changes are needed, end with exactly: VERDICT: REVISE"
 ```
 
-**Capture the Codex session ID** from the output line that says `session id: <uuid>`. Store as `CODEX_SESSION_ID`. Use this exact ID for resume — do NOT use `--last` which is race-prone with concurrent sessions.
+**Capture the Codex session ID** from the output line that says `session id: <uuid>`. Store as `CODEX_SESSION_ID`. You MUST use this exact ID to resume in subsequent rounds — do NOT use `--last`, which would grab the wrong session if multiple reviews are running concurrently.
+
+**Notes:**
+- Use `-m gpt-5.3-codex` as the default model (configured in `~/.codex/config.toml`). If the user specifies a different model (e.g., `/codex-review o4-mini`), use that instead.
+- Use `-s read-only` so Codex can read the codebase for context but cannot modify anything.
+- Use `-o` to capture the output to a file for reliable reading.
 
 ## Step 4: Read Review & Check Verdict
 
@@ -141,7 +146,7 @@ Then return to **Step 4**.
 [Final Codex feedback / approval message]
 
 ---
-The plan has been reviewed and approved by Codex. Ready for your approval to implement.
+**The plan has been reviewed and approved by Codex. Ready for your approval to implement.**
 ```
 
 **Max rounds reached without approval:**
@@ -154,7 +159,7 @@ The plan has been reviewed and approved by Codex. Ready for your approval to imp
 [List unresolved issues from last review]
 
 ---
-Codex still has concerns. Review the remaining items and decide whether to proceed or continue refining.
+**Codex still has concerns. Review the remaining items and decide whether to proceed or continue refining.**
 ```
 
 ## Step 8: Cleanup
@@ -165,11 +170,22 @@ rm -rf /tmp/ai-review-${REVIEW_ID}
 
 ---
 
+## Loop Summary
+
+```
+Round 1: Claude sends plan → Codex reviews → REVISE?
+Round 2: Claude revises → Codex re-reviews (resume session) → REVISE?
+Round 3: Claude revises → Codex re-reviews (resume session) → APPROVED ✅
+```
+
+Max 5 rounds. Each round preserves Codex's conversation context via session resume.
+
 ## Rules
 
-- Claude **actively revises the plan** based on feedback — this is not just message passing
-- Default model: `gpt-5.3-codex`. Accept override from command args (e.g., `/codex-review o4-mini`)
-- Always use read-only sandbox mode (`-s read-only`) — Codex must never write files
-- Max 5 review rounds
-- Show each round's feedback and revisions so the user can follow along
-- If a revision contradicts the user's explicit requirements, skip it and note it
+- Claude **actively revises the plan** based on Codex feedback between rounds — this is NOT just passing messages, Claude should make real improvements
+- Default model is `gpt-5.3-codex`. Accept model override from the user's arguments (e.g., `/codex-review o4-mini`)
+- Always use read-only sandbox mode — Codex should never write files
+- Max 5 review rounds to prevent infinite loops
+- Show the user each round's feedback and revisions so they can follow along
+- If Codex CLI is not installed or fails, inform the user and suggest `npm install -g @openai/codex`
+- If a revision contradicts the user's explicit requirements, skip that revision and note it for the user

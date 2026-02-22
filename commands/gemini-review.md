@@ -80,8 +80,13 @@ If changes are needed, end with exactly: VERDICT: REVISE" \
 ```bash
 gemini --list-sessions | head -3
 ```
-Read the most recent session index (typically `0` or `1`). Store as `GEMINI_SESSION_IDX`.
-Use this explicit index for resume — do NOT use `--resume latest` which is race-prone with concurrent sessions.
+Read the most recent session index (typically `0` or `1`). Store as `GEMINI_SESSION_IDX`. You MUST use this exact index to resume in subsequent rounds — do NOT use `--resume latest`, which would grab the wrong session if multiple reviews are running concurrently.
+
+**Notes:**
+- Use `-m gemini-3.1-pro-preview` as the default model. If the user specifies a different model (e.g., `/gemini-review gemini-2.0-flash`), use that instead.
+- Use `--approval-mode=plan` so Gemini cannot execute shell commands — it can only review.
+- Plan content is always piped via stdin so there is no shell argument length limit on large plans.
+- Output is captured via stdout redirect to the output file for reliable reading.
 
 ## Step 4: Read Review & Check Verdict
 
@@ -89,7 +94,7 @@ Use this explicit index for resume — do NOT use `--resume latest` which is rac
 2. Present Gemini's review:
 
 ```
-## Gemini Review — Round N (model: gemini-2.5-pro)
+## Gemini Review — Round N (model: gemini-3.1-pro-preview)
 
 [Gemini's feedback here]
 ```
@@ -116,11 +121,12 @@ Based on Gemini's feedback:
 
 ## Step 6: Re-submit to Gemini (Rounds 2–5)
 
-Resume the existing Gemini session for full context:
+Resume the existing Gemini session for full context. The updated plan is again passed via stdin:
 
 ```bash
-gemini --resume ${GEMINI_SESSION_IDX} \
-  -p "I've revised the plan based on your feedback. The updated plan is provided below via stdin.
+cat /tmp/ai-review-${REVIEW_ID}/plan.md | gemini \
+  --resume ${GEMINI_SESSION_IDX} \
+  -p "I've revised the plan based on your feedback. The updated plan is provided via stdin.
 
 Here's what I changed:
 [List the specific changes made]
@@ -130,7 +136,7 @@ If more changes are needed, end with: VERDICT: REVISE" \
   --approval-mode=plan 2>&1
 ```
 
-If resume fails (session expired or index stale), fall back to a fresh call with `cat plan.md | gemini -p "..."` and include context about prior rounds in the prompt.
+If resume fails (session expired or index stale), fall back to a fresh `cat plan.md | gemini -p "..."` call and include a summary of prior rounds in the prompt.
 
 Then return to **Step 4**.
 
@@ -138,19 +144,19 @@ Then return to **Step 4**.
 
 **Approved:**
 ```
-## Gemini Review — Final (model: gemini-2.5-pro)
+## Gemini Review — Final (model: gemini-3.1-pro-preview)
 
 **Status:** ✅ Approved after N round(s)
 
 [Final Gemini feedback / approval message]
 
 ---
-The plan has been reviewed and approved by Gemini. Ready for your approval to implement.
+**The plan has been reviewed and approved by Gemini. Ready for your approval to implement.**
 ```
 
 **Max rounds reached without approval:**
 ```
-## Gemini Review — Final (model: gemini-2.5-pro)
+## Gemini Review — Final (model: gemini-3.1-pro-preview)
 
 **Status:** ⚠️ Max rounds (5) reached — not fully approved
 
@@ -158,7 +164,7 @@ The plan has been reviewed and approved by Gemini. Ready for your approval to im
 [List unresolved issues from last review]
 
 ---
-Gemini still has concerns. Review the remaining items and decide whether to proceed or continue refining.
+**Gemini still has concerns. Review the remaining items and decide whether to proceed or continue refining.**
 ```
 
 ## Step 8: Cleanup
@@ -169,12 +175,23 @@ rm -rf /tmp/ai-review-${REVIEW_ID}
 
 ---
 
+## Loop Summary
+
+```
+Round 1: Claude sends plan → Gemini reviews → REVISE?
+Round 2: Claude revises → Gemini re-reviews (resume session) → REVISE?
+Round 3: Claude revises → Gemini re-reviews (resume session) → APPROVED ✅
+```
+
+Max 5 rounds. Each round preserves Gemini's conversation context via session resume.
+
 ## Rules
 
-- Claude **actively revises the plan** based on feedback — this is not just message passing
-- Default model: `gemini-3.1-pro-preview`. Accept override from command args
-- Always use `--approval-mode=plan` so Gemini cannot execute commands
-- Plan content goes through stdin pipe, never inlined in the `-p` flag
-- Max 5 review rounds
-- Show each round's feedback and revisions so the user can follow along
-- If a revision contradicts the user's explicit requirements, skip it and note it
+- Claude **actively revises the plan** based on Gemini feedback between rounds — this is NOT just passing messages, Claude should make real improvements
+- Default model is `gemini-3.1-pro-preview`. Accept model override from the user's arguments (e.g., `/gemini-review gemini-2.0-flash`)
+- Always use `--approval-mode=plan` — Gemini should never execute shell commands
+- Plan content always goes through stdin pipe, never inlined in the `-p` flag — avoids shell arg length limits on large plans
+- Max 5 review rounds to prevent infinite loops
+- Show the user each round's feedback and revisions so they can follow along
+- If Gemini CLI is not installed or fails, inform the user and suggest `npm install -g @google/gemini-cli && gemini auth`
+- If a revision contradicts the user's explicit requirements, skip that revision and note it for the user

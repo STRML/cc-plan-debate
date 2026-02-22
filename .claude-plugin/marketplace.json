@@ -1,12 +1,12 @@
 {
-  "name": "cc-plugin-ai-review-dev",
+  "name": "debate-dev",
   "description": "Development marketplace for cc-plugin-ai-review",
   "owner": {
     "name": "strml"
   },
   "plugins": [
     {
-      "name": "cc-plugin-ai-review",
+      "name": "debate",
       "description": "Multi-model AI plan review with parallel execution, synthesis, and debate",
       "version": "1.0.0",
       "source": "./",

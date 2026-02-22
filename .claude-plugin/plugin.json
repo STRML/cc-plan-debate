@@ -1,5 +1,5 @@
 {
-  "name": "cc-plugin-ai-review",
+  "name": "debate",
   "version": "1.0.0",
   "description": "Multi-model AI plan review: run Codex and Gemini in parallel, synthesize feedback, debate contradictions",
   "author": {

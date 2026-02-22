@@ -135,14 +135,21 @@ fi
 
 ```bash
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-CLAUDE_CODE_SIMPLE=1 "${TIMEOUT_CMD[@]}" claude --resume "$OPUS_SESSION_ID" -p "{prompt}" \
+"${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" \
+  -p "$(cat {prompt_file})" \
   --tools "" \
   --disable-slash-commands \
   --strict-mcp-config \
   --settings '{"disableAllHooks":true}' \
   --output-format json \
   > {json_file}
-jq -r '.result // ""' {json_file}
+RESUME_EXIT=$?
+if [ "$RESUME_EXIT" -eq 0 ]; then
+  jq -r '.result // ""' {json_file} > {output_file}
+  NEW_SID=$(jq -r '.session_id // ""' {json_file})
+  [ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
+fi
+# On non-zero exit: fall back to fresh call, recapture OPUS_SESSION_ID
 ```
 
 ---
@@ -301,10 +308,10 @@ Add Claude Opus to the final status block:
 - **`unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT`** is required before nested `claude -p` calls. Without it: `Claude Code cannot be launched inside another Claude Code session`.
 - **`jq`** is required as a new dependency to parse JSON output.
 
-## Remaining Open Questions
+## Resolved Questions
 
-1. **`--output-format json` with `--resume`**: Verify `.session_id` in resume responses (may return same session ID or a new one).
-2. **`CLAUDE_CODE_SIMPLE=1` with `--resume`**: Verify simple mode is honored on resume calls.
+1. **`--output-format json` with `--resume`**: ✅ Resolved — `.session_id` is present in resume responses. Implementation captures it via `NEW_SID=$(jq -r '.session_id // ""' ...)` and updates `OPUS_SESSION_ID` on every resume call.
+2. **`CLAUDE_CODE_SIMPLE=1` with `--resume`**: ✅ Resolved — `env CLAUDE_CODE_SIMPLE=1` is passed on all resume calls in the implementation and works correctly.
 
 ---
 

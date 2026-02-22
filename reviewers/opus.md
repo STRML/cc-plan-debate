@@ -91,7 +91,8 @@ fi
 
 ```bash
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-"${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" -p "{prompt}" \
+"${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" \
+  -p "$(cat {prompt_file})" \
   --tools "" \
   --disable-slash-commands \
   --strict-mcp-config \
@@ -99,9 +100,12 @@ unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
   --output-format json \
   > {json_file}
 RESUME_EXIT=$?
-jq -r '.result // ""' {json_file}
-NEW_SID=$(jq -r '.session_id // ""' {json_file})
-[ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
+if [ "$RESUME_EXIT" -eq 0 ]; then
+  jq -r '.result // ""' {json_file} > {output_file}
+  NEW_SID=$(jq -r '.session_id // ""' {json_file})
+  [ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
+fi
+# On non-zero exit: fall back to fresh call and recapture OPUS_SESSION_ID from new .session_id
 ```
 
 If resume fails (non-zero exit or empty output), fall back to a fresh call and

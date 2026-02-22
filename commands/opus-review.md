@@ -183,13 +183,13 @@ If `OPUS_SESSION_ID` is set, resume the existing session. Build the resume promp
   echo "If more changes are needed, end with: VERDICT: REVISE"
 } > /tmp/ai-review-${REVIEW_ID}/resume-prompt.txt
 
-RESUME_PROMPT=$(cat /tmp/ai-review-${REVIEW_ID}/resume-prompt.txt)
 ```
 
 **If `OPUS_SESSION_ID` is non-empty:**
 ```bash
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-"${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" -p "$RESUME_PROMPT" \
+"${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" \
+  -p "$(cat /tmp/ai-review-${REVIEW_ID}/resume-prompt.txt)" \
   --tools "" \
   --disable-slash-commands \
   --strict-mcp-config \
@@ -197,15 +197,30 @@ unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
   --output-format json \
   > /tmp/ai-review-${REVIEW_ID}/opus-raw.json
 OPUS_EXIT=$?
-jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
-  > /tmp/ai-review-${REVIEW_ID}/opus-output.md
-NEW_SID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)
-[ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
+if [ "$OPUS_EXIT" -eq 0 ]; then
+  jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
+    > /tmp/ai-review-${REVIEW_ID}/opus-output.md
+  NEW_SID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)
+  [ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
+else
+  # Resume failed — fall back to fresh call
+  unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
+  "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
+    "$(cat /tmp/ai-review-${REVIEW_ID}/resume-prompt.txt)" \
+    --model "$MODEL" \
+    --tools "" \
+    --disable-slash-commands \
+    --strict-mcp-config \
+    --settings '{"disableAllHooks":true}' \
+    --output-format json \
+    > /tmp/ai-review-${REVIEW_ID}/opus-raw.json
+  jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
+    > /tmp/ai-review-${REVIEW_ID}/opus-output.md
+  OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)
+fi
 ```
 
-**If `OPUS_SESSION_ID` is empty or resume fails (non-zero exit):**
-- Fall back to a fresh `claude -p` call with a summary of prior rounds prepended (assembled via file, not inline)
-- After the fresh call, recapture `OPUS_SESSION_ID` from the new `.session_id` field — do NOT continue using the old session ID
+**Note on prompt passing:** The resume prompt references a pre-written file (`resume-prompt.txt`) and uses `$(cat file)` inline — this is acceptable since the shell only does word splitting and globbing on unquoted expansions; double-quoting prevents both. There is no stdin alternative for `claude --resume -p`.
 
 Then go back to **Step 4** (Read Review & Check Verdict).
 

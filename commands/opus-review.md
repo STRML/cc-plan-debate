@@ -22,7 +22,7 @@ which jq
 
 If `claude` is not found, stop and display:
 
-```
+```text
 Claude CLI is not installed.
 
 Install it with:
@@ -33,7 +33,7 @@ After installing, re-run /debate:opus-review.
 
 If `jq` is not found, stop and display:
 
-```
+```text
 jq is not installed. It is required to parse Claude's JSON output.
 
 Install it with:
@@ -134,7 +134,7 @@ OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw
 1. Read `/tmp/ai-review-${REVIEW_ID}/opus-output.md`
 2. Present Opus's review:
 
-```
+```text
 ## Opus Review — Round N (model: $MODEL)
 
 [Opus's feedback here]
@@ -161,7 +161,7 @@ EOF
 
 3. Summarize changes for the user:
 
-```
+```text
 ### Revisions (Round N)
 - [What was changed and why, one bullet per Opus issue addressed]
 ```
@@ -213,7 +213,7 @@ Then go back to **Step 4** (Read Review & Check Verdict).
 
 Once approved (or max rounds reached):
 
-```
+```text
 ## Opus Review — Final (model: $MODEL)
 
 **Status:** ✅ Approved after N round(s)
@@ -226,7 +226,7 @@ Once approved (or max rounds reached):
 
 If max rounds were reached without approval:
 
-```
+```text
 ## Opus Review — Final (model: $MODEL)
 
 **Status:** ⚠️ Max rounds (5) reached — not fully approved
@@ -248,7 +248,7 @@ If any step failed before reaching this step, still run this cleanup.
 
 ## Loop Summary
 
-```
+```text
 Round 1: Claude sends plan → Opus reviews → REVISE?
 Round 2: Claude revises → Opus re-reviews (resume session) → REVISE?
 Round 3: Claude revises → Opus re-reviews (resume session) → APPROVED ✅

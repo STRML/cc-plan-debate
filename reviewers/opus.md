@@ -75,7 +75,7 @@ Deterministic — parse from the JSON output file:
 OPUS_SESSION_ID=$(jq -r '.session_id // ""' {json_file})
 ```
 
-Store as `OPUS_SESSION_ID_{reviewer_name}`.
+Store as `OPUS_SESSION_ID`.
 
 Always guard resume on a non-empty session ID:
 

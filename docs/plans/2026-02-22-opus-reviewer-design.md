@@ -187,7 +187,7 @@ Add:
 Add after the Gemini block:
 
 ```bash
-if which claude > /dev/null 2>&1; then
+if which claude > /dev/null 2>&1 && which jq > /dev/null 2>&1; then
   (
     unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
     CLAUDE_CODE_SIMPLE=1 "${TIMEOUT_CMD[@]}" claude -p \

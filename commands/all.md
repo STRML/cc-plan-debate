@@ -373,9 +373,11 @@ if [ -n "$OPUS_SESSION_ID" ]; then
     --tools "" --disable-slash-commands --strict-mcp-config \
     --settings '{"disableAllHooks":true}' --output-format json \
     > /tmp/ai-review-${REVIEW_ID}/opus-debate-raw.json
+  RESUME_EXIT=$?
   jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-debate-raw.json
   NEW_SID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-debate-raw.json)
   [ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
+  [ "$RESUME_EXIT" -ne 0 ] && echo "⚠️ Opus debate resume failed (exit $RESUME_EXIT) — skipping Opus debate response." && OPUS_SESSION_ID=""
 else
   # Fall back to fresh call; recapture OPUS_SESSION_ID from .session_id
   unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT

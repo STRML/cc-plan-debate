@@ -1,6 +1,6 @@
 ---
 description: Run ALL available AI reviewers in parallel on the current plan, synthesize their feedback, debate contradictions, and produce a consensus verdict. Supports Codex and Gemini with graceful fallback if either is unavailable.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/ai-review-:*), Bash(rm -rf /tmp/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(codex exec -m:*), Bash(codex exec resume:*), Bash(gemini -p:*), Bash(gemini --list-sessions:*), Bash(gemini --resume:*), Bash(cat /tmp/ai-review-:*), Bash(timeout:*), Bash(gtimeout:*), Bash(sh -c:*), Bash(chmod +x /tmp/ai-review-:*), Bash(wait:*)
+allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/ai-review-:*), Bash(rm -rf /tmp/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(codex exec -m:*), Bash(codex exec resume:*), Bash(gemini -p:*), Bash(gemini --list-sessions:*), Bash(gemini --resume:*), Bash(timeout:*), Bash(gtimeout:*), Bash(diff:*), Bash(chmod +x /tmp/ai-review-:*), Bash(/tmp/ai-review-:*)
 ---
 
 # AI Multi-Model Plan Review
@@ -41,19 +41,35 @@ If a reviewer binary is missing, show how to install it:
 | codex | `npm install -g @openai/codex` + set `OPENAI_API_KEY` |
 | gemini | `npm install -g @google/gemini-cli` + run `gemini auth` |
 
-**If NO reviewers are available**, stop and display the full install guide, then exit.
-
-**If at least one reviewer is available**, proceed with those that are.
-
-### 1b. Resolve timeout binary
-
-Resolve once — macOS ships `gtimeout`, Linux ships `timeout`:
+If Gemini is available, verify it is authenticated:
 
 ```bash
-TIMEOUT_BIN=$(command -v timeout || command -v gtimeout)
+gemini --list-sessions > /dev/null 2>&1
 ```
 
-If neither is found, warn the user (`Install GNU coreutils: brew install coreutils`) and proceed without a timeout wrapper by setting `TIMEOUT_BIN=env`.
+If this fails, warn: `Gemini is not authenticated — run: gemini auth`
+
+**If NO reviewers are available**, stop and display the full install guide, then exit.
+
+**If fewer than 2 reviewers are available**, note which is missing and proceed with the single available reviewer. Skip Step 5 (debate) entirely when only 1 reviewer runs — debate requires at least 2 reviewers.
+
+### 1b. Resolve timeout command
+
+Resolve once and build as an array — macOS ships `gtimeout` (coreutils), Linux ships `timeout`:
+
+```bash
+TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
+if [ -n "$TIMEOUT_BIN" ]; then
+  TIMEOUT_CMD=("$TIMEOUT_BIN" 120)
+else
+  echo "Warning: neither 'timeout' nor 'gtimeout' found."
+  echo "Install with: brew install coreutils"
+  echo "Proceeding without timeout protection."
+  TIMEOUT_CMD=()
+fi
+```
+
+Invoke as `"${TIMEOUT_CMD[@]}" codex exec ...` — when `TIMEOUT_CMD` is empty this reduces to just `codex exec ...`.
 
 ### 1c. Generate session ID & temp dir
 
@@ -69,7 +85,9 @@ Temp file paths:
 - Codex exit code: `/tmp/ai-review-${REVIEW_ID}/codex-exit.txt`
 - Gemini output: `/tmp/ai-review-${REVIEW_ID}/gemini-output.md`
 - Gemini exit code: `/tmp/ai-review-${REVIEW_ID}/gemini-exit.txt`
-- Sessions snapshot (before): `/tmp/ai-review-${REVIEW_ID}/sessions-before.txt`
+- Sessions before: `/tmp/ai-review-${REVIEW_ID}/sessions-before.txt`
+- Sessions after: `/tmp/ai-review-${REVIEW_ID}/sessions-after.txt`
+- Runner script: `/tmp/ai-review-${REVIEW_ID}/run-parallel.sh`
 
 **Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/ai-review-${REVIEW_ID}` before stopping.
 
@@ -84,45 +102,48 @@ If there is no plan in the current context, ask the user to paste it or describe
 ```
 Running parallel review with: codex, gemini
 Timeout per reviewer: 120s
-
-Suggested permission allowlist (run once to avoid prompts):
-  Bash(codex exec -m:*), Bash(codex exec resume:*),
-  Bash(gemini -p:*), Bash(gemini --list-sessions:*), Bash(gemini --resume:*),
-  Bash(uuidgen:*), Bash(timeout:*), Bash(gtimeout:*), Bash(which:*),
-  Bash(cat /tmp/ai-review-:*), Bash(rm -rf /tmp/ai-review-:*)
 ```
+
+Run `/debate:setup` to see the full permission allowlist and configure for unattended use.
 
 ---
 
 ## Step 2: Parallel Review (Round N)
-
-Write a parallel runner script and execute it. This avoids PID-capture issues with the Bash tool's non-interactive shell:
 
 **Snapshot Gemini sessions before launch:**
 ```bash
 gemini --list-sessions 2>/dev/null > /tmp/ai-review-${REVIEW_ID}/sessions-before.txt
 ```
 
-**Write the runner script:**
+**Write the parallel runner script.** Note: `TIMEOUT_BIN` is passed as `$2` so the script can build its own array:
+
 ```bash
 cat > /tmp/ai-review-${REVIEW_ID}/run-parallel.sh << 'SCRIPTEOF'
 #!/bin/bash
 REVIEW_ID="$1"
 TIMEOUT_BIN="$2"
+
+# Build timeout command array
+if [ -n "$TIMEOUT_BIN" ]; then
+  TIMEOUT_CMD=("$TIMEOUT_BIN" 120)
+else
+  TIMEOUT_CMD=()
+fi
+
 PIDS=()
 
 if which codex > /dev/null 2>&1; then
   (
-    "$TIMEOUT_BIN" 120 codex exec \
+    "${TIMEOUT_CMD[@]}" codex exec \
       -m gpt-5.3-codex \
       -s read-only \
       -o /tmp/ai-review-${REVIEW_ID}/codex-output.md \
       "Review the implementation plan in /tmp/ai-review-${REVIEW_ID}/plan.md. Focus on:
 1. Correctness - Will this plan achieve the stated goals?
-2. Risks - What could go wrong? Edge cases? Data loss?
-3. Missing steps - Is anything forgotten?
-4. Alternatives - Is there a simpler or better approach?
-5. Security - Any security concerns?
+2. Bugs - Shell syntax errors, wrong flags, race conditions?
+3. Missing steps - Is anything forgotten in the flow?
+4. Edge cases - Timeout handling, session expiry, single-reviewer fallback?
+5. Security - Is plan content ever unsafely inlined in shell strings?
 
 Be specific and actionable. End with VERDICT: APPROVED or VERDICT: REVISE" \
       2>&1 | tee /tmp/ai-review-${REVIEW_ID}/codex-stdout.txt
@@ -133,35 +154,36 @@ fi
 
 if which gemini > /dev/null 2>&1; then
   (
-    cat /tmp/ai-review-${REVIEW_ID}/plan.md | "$TIMEOUT_BIN" 120 gemini \
+    "${TIMEOUT_CMD[@]}" gemini \
       -p "Review this implementation plan (provided via stdin). Focus on:
 1. Correctness - Will this plan achieve the stated goals?
-2. Risks - What could go wrong? Edge cases? Data loss?
-3. Missing steps - Is anything forgotten?
-4. Alternatives - Is there a simpler or better approach?
-5. Security - Any security concerns?
+2. Bugs - Shell syntax errors, wrong flags, race conditions?
+3. Missing steps - Is anything forgotten in the flow?
+4. Edge cases - Timeout handling, session expiry, single-reviewer fallback?
+5. Security - Is plan content ever unsafely inlined in shell strings?
 
 Be specific and actionable. End with VERDICT: APPROVED or VERDICT: REVISE" \
       -m gemini-3.1-pro-preview \
       -s \
       -e "" \
+      < /tmp/ai-review-${REVIEW_ID}/plan.md \
       > /tmp/ai-review-${REVIEW_ID}/gemini-output.md 2>&1
-    echo "${PIPESTATUS[0]}" > /tmp/ai-review-${REVIEW_ID}/gemini-exit.txt
+    echo "$?" > /tmp/ai-review-${REVIEW_ID}/gemini-exit.txt
   ) &
   PIDS+=($!)
 fi
 
-# Wait only for the PIDs we actually launched
 if [ ${#PIDS[@]} -gt 0 ]; then
   wait "${PIDS[@]}"
 fi
+echo "All reviewers complete"
 SCRIPTEOF
 chmod +x /tmp/ai-review-${REVIEW_ID}/run-parallel.sh
 ```
 
 **Execute it:**
 ```bash
-/tmp/ai-review-${REVIEW_ID}/run-parallel.sh $REVIEW_ID $TIMEOUT_BIN
+/tmp/ai-review-${REVIEW_ID}/run-parallel.sh "$REVIEW_ID" "$TIMEOUT_BIN"
 ```
 
 ### Check exit codes
@@ -170,6 +192,19 @@ Read each `*-exit.txt` file:
 - `0` → success
 - `124` → timed out (mark reviewer as timed-out, skip in synthesis)
 - Other non-zero → error (mark as failed, note exit code)
+
+**If all reviewers timed out or failed:**
+```
+## AI Review — UNDECIDED
+
+All reviewers failed or timed out. No synthesis is possible.
+
+Options:
+- Increase timeout and re-run /debate:all
+- Run /debate:codex-review or /debate:gemini-review individually
+- Check reviewer installation and authentication
+```
+Then clean up and exit.
 
 **Capture Codex session ID** from stdout:
 ```bash
@@ -180,10 +215,12 @@ Extract the UUID. Store as `CODEX_SESSION_ID`.
 **Capture Gemini session UUID** by diffing the session list:
 ```bash
 gemini --list-sessions 2>/dev/null > /tmp/ai-review-${REVIEW_ID}/sessions-after.txt
+diff /tmp/ai-review-${REVIEW_ID}/sessions-before.txt \
+     /tmp/ai-review-${REVIEW_ID}/sessions-after.txt
 ```
-Find the new entry in `sessions-after.txt` that wasn't in `sessions-before.txt`. Parse the UUID in `[...]` format. Store as `GEMINI_SESSION_UUID`.
+Find the new entry and parse its UUID from the `[uuid]` field. Store as `GEMINI_SESSION_UUID`.
 
-This is more reliable than positional indexes, which shift when sessions are deleted.
+If the diff shows multiple new sessions (concurrent usage), prefer the one whose title most closely matches the plan. If still ambiguous, set `GEMINI_SESSION_UUID=""` — resume will fall back to a fresh call if needed.
 
 ---
 
@@ -232,40 +269,45 @@ Read all reviewer outputs and categorize:
 Extract each reviewer's verdict. Determine **overall verdict**:
 - All available reviewers → APPROVED → skip debate, go to Step 6 (approved)
 - Any reviewer → REVISE → continue to Step 5
+- If only 1 reviewer succeeded → skip Step 5, treat that reviewer's verdict as final
 
 ---
 
-## Step 5: Targeted Debate (unless `skip-debate` argument was passed)
+## Step 5: Targeted Debate (unless `skip-debate` argument was passed, or fewer than 2 reviewers succeeded)
 
 Max 2 debate rounds. Skip if there are no contradictions.
 
 For each contradiction, send a targeted question to each reviewer via session resume.
 
-**Write prompts to temp files first** — never interpolate reviewer positions or debate content into quoted shell strings directly:
+**Build debate prompts from files** — never interpolate reviewer positions directly into shell strings:
 
 ```bash
-cat > /tmp/ai-review-${REVIEW_ID}/codex-debate-prompt.txt << 'PROMPTEOF'
-Gemini raised a concern about [specific point]: [Gemini's position — fill in].
-You said [Codex's position — fill in]. Can you address this specific disagreement?
-Do you stand by your position, or does Gemini's point change your assessment?
-PROMPTEOF
+# For Codex:
+{
+  echo "Gemini raised a concern about [topic]: [Gemini's position]."
+  echo "You said: [Codex's position]."
+  echo "Can you address this specific disagreement? Do you stand by your position, or does Gemini's point change your assessment?"
+} > /tmp/ai-review-${REVIEW_ID}/codex-debate-prompt.txt
 
 DEBATE_PROMPT=$(cat /tmp/ai-review-${REVIEW_ID}/codex-debate-prompt.txt)
-$TIMEOUT_BIN 60 codex exec resume ${CODEX_SESSION_ID} "$DEBATE_PROMPT" 2>&1 | tail -80
+"${TIMEOUT_CMD[@]}" codex exec resume ${CODEX_SESSION_ID} "$DEBATE_PROMPT" 2>&1 | tail -80
 ```
 
 ```bash
-cat > /tmp/ai-review-${REVIEW_ID}/gemini-debate-prompt.txt << 'PROMPTEOF'
-Codex raised a concern about [specific point]: [Codex's position — fill in].
-You said [Gemini's position — fill in]. Can you address this specific disagreement?
-Do you stand by your position, or does Codex's point change your assessment?
-PROMPTEOF
+# For Gemini:
+{
+  echo "Codex raised a concern about [topic]: [Codex's position]."
+  echo "You said: [Gemini's position]."
+  echo "Can you address this specific disagreement? Do you stand by your position, or does Codex's point change your assessment?"
+} > /tmp/ai-review-${REVIEW_ID}/gemini-debate-prompt.txt
 
 DEBATE_PROMPT=$(cat /tmp/ai-review-${REVIEW_ID}/gemini-debate-prompt.txt)
-$TIMEOUT_BIN 60 gemini --resume $GEMINI_SESSION_UUID -p "$DEBATE_PROMPT" -s -e "" 2>&1
+"${TIMEOUT_CMD[@]}" gemini --resume $GEMINI_SESSION_UUID -p "$DEBATE_PROMPT" -s -e "" 2>&1
 ```
 
-Display each response:
+If a session resume fails, skip that reviewer's debate response and note it.
+
+Display each debate exchange:
 
 ```
 ### Debate Round N — [Topic]
@@ -303,17 +345,23 @@ VERDICT: SPLIT — Reviewers disagree. [Summary]. Claude recommends: [proceed/re
 
 ---
 
-## Step 7: Revision Loop (if VERDICT: REVISE, max 3 total rounds)
+## Step 7: Revision Loop (if VERDICT: REVISE or SPLIT, max 3 total rounds)
 
 1. **Claude revises the plan** — address highest-priority concerns from all reviewers
-2. Summarize what changed:
+2. Write revision summary to a file (never inline in shell strings):
+   ```bash
+   cat > /tmp/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
+   [Write revision bullets before closing the heredoc]
+   EOF
+   ```
+3. Show revisions to the user:
    ```
    ### Revisions (Round N)
    - [What was changed and why]
    ```
-3. Rewrite `/tmp/ai-review-${REVIEW_ID}/plan.md` with the revised plan
-4. Snapshot Gemini sessions before re-launch
-5. Return to **Step 2** with incremented round counter
+4. Rewrite `/tmp/ai-review-${REVIEW_ID}/plan.md` with the revised plan
+5. Snapshot Gemini sessions before re-launch
+6. Return to **Step 2** with incremented round counter
 
 If max rounds (3) reached without unanimous approval:
 
@@ -343,14 +391,14 @@ If any step failed before reaching this step, still run this cleanup.
 
 ## Rules
 
-- **Security:** Never inline plan content or AI-generated text in shell command strings — pass via file path, stdin pipe, or temp file read into a variable
-- **Parallelism:** Use the runner script approach so PIDs are captured correctly inside a single bash process
-- **Exit codes:** Always use `${PIPESTATUS[0]}` (not `$?`) after pipelines to capture the real exit code through `tee`
-- **Timeout:** Always resolve `TIMEOUT_BIN` first; use it for all reviewer calls
-- **Graceful degradation:** If only one reviewer is available, run the full flow with that single reviewer
-- **Timeout handling:** A timed-out reviewer is skipped in synthesis but noted in the report
-- **Gemini sessions:** Always use UUID from `--list-sessions` diff — never positional indexes or `latest`
-- **Debate scope:** Only query reviewers on points they specifically raised
+- **Security:** Never inline plan content or AI-generated text in shell strings — pass via file path, stdin redirect, or `$(cat file)` with a pre-written temp file
+- **Parallelism:** Use the runner script approach so PIDs are captured correctly inside a single bash process with job control
+- **Timeout array:** Always resolve `TIMEOUT_CMD` as an array at setup; use `"${TIMEOUT_CMD[@]}"` to invoke — empty array means no timeout, not a broken command
+- **Exit codes:** Use `${PIPESTATUS[0]}` after Codex pipelines (pipeline starts with timeout); use `$?` directly after Gemini (stdin redirect, single command)
+- **Graceful degradation:** If only 1 reviewer is available, run the full flow and skip the debate phase
+- **All-fail handling:** If all reviewers fail/timeout, return `UNDECIDED` with retry guidance
+- **Session tracking:** Always recapture session IDs after fallback fresh calls — never reuse stale IDs
+- **Gemini sessions:** Always use UUID from `--list-sessions` diff; if ambiguous, fall back to fresh call
+- **Debate guard:** Explicitly skip Step 5 if fewer than 2 reviewers succeeded
 - **Revision discipline:** Make real plan improvements, not cosmetic changes
 - **User control:** If a revision would contradict the user's explicit requirements, skip it and note it
-- **Custom reviewers:** Users can add reviewer definitions at `~/.claude/ai-review/reviewers/` — any `.md` file there overrides built-in reviewers by name

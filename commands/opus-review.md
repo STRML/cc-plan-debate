@@ -111,7 +111,17 @@ If changes are needed, end with exactly: VERDICT: REVISE" \
 OPUS_EXIT=$?
 ```
 
-If `OPUS_EXIT` is `124`, Opus timed out — inform the user and stop.
+If `OPUS_EXIT` is non-zero, stop and clean up:
+
+```bash
+if [ "$OPUS_EXIT" -eq 124 ]; then
+  echo "Opus timed out after 120s."
+  rm -rf /tmp/ai-review-${REVIEW_ID}; exit 1
+elif [ "$OPUS_EXIT" -ne 0 ]; then
+  echo "Opus failed (exit $OPUS_EXIT)."
+  rm -rf /tmp/ai-review-${REVIEW_ID}; exit 1
+fi
+```
 
 **Extract review text and capture session ID:**
 ```bash

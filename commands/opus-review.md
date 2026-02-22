@@ -111,7 +111,7 @@ If changes are needed, end with exactly: VERDICT: REVISE" \
 OPUS_EXIT=$?
 ```
 
-If `OPUS_EXIT` is non-zero, stop and clean up:
+Check exit code and extract output:
 
 ```bash
 if [ "$OPUS_EXIT" -eq 124 ]; then
@@ -120,14 +120,11 @@ if [ "$OPUS_EXIT" -eq 124 ]; then
 elif [ "$OPUS_EXIT" -ne 0 ]; then
   echo "Opus failed (exit $OPUS_EXIT)."
   rm -rf /tmp/ai-review-${REVIEW_ID}; exit 1
+else
+  jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
+    > /tmp/ai-review-${REVIEW_ID}/opus-output.md
+  OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)
 fi
-```
-
-**Extract review text and capture session ID:**
-```bash
-jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
-  > /tmp/ai-review-${REVIEW_ID}/opus-output.md
-OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)
 ```
 
 **Notes:**

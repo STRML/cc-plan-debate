@@ -94,11 +94,15 @@ unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
   --output-format json \
   "You are The Skeptic. Review the implementation plan in {plan_file}. ..." \
   > {json_file}
-echo "$?" > {exit_file}
-
-# Extract review text and session ID from JSON
-jq -r '.result // ""' {json_file} > {output_file}
-OPUS_SESSION_ID=$(jq -r '.session_id // ""' {json_file})
+OPUS_EXIT=$?
+if [ "$OPUS_EXIT" -eq 124 ]; then
+  echo "Opus timed out."; exit 1
+elif [ "$OPUS_EXIT" -ne 0 ]; then
+  echo "Opus failed (exit $OPUS_EXIT)."; exit 1
+else
+  jq -r '.result // ""' {json_file} > {output_file}
+  OPUS_SESSION_ID=$(jq -r '.session_id // ""' {json_file})
+fi
 ```
 
 Flags:

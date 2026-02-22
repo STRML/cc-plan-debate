@@ -109,11 +109,6 @@ Be specific and actionable. If the plan is solid and ready to implement, end you
 If changes are needed, end with exactly: VERDICT: REVISE" \
   > /tmp/ai-review-${REVIEW_ID}/opus-raw.json
 OPUS_EXIT=$?
-```
-
-Check exit code and extract output:
-
-```bash
 if [ "$OPUS_EXIT" -eq 124 ]; then
   echo "Opus timed out after 120s."
   rm -rf /tmp/ai-review-${REVIEW_ID}; exit 1
@@ -228,10 +223,11 @@ else
   elif [ "$FRESH_EXIT" -ne 0 ]; then
     echo "Warning: Opus fresh call failed (exit $FRESH_EXIT) — stopping."
     rm -rf /tmp/ai-review-${REVIEW_ID}; exit 1
+  else
+    jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
+      > /tmp/ai-review-${REVIEW_ID}/opus-output.md
+    OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)
   fi
-  jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
-    > /tmp/ai-review-${REVIEW_ID}/opus-output.md
-  OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)
 fi
 ```
 

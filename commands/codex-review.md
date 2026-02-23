@@ -71,7 +71,9 @@ Run the Codex reviewer script (handles all codex flags, session capture, and ret
 TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" \
   "/tmp/claude/ai-review-${REVIEW_ID}" "" "$MODEL"
 CODEX_EXIT=$?
-if [ "$CODEX_EXIT" -eq 124 ]; then
+if [ "$CODEX_EXIT" -eq 77 ]; then
+  cat /tmp/claude/ai-review-${REVIEW_ID}/codex-output.md; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
+elif [ "$CODEX_EXIT" -eq 124 ]; then
   echo "Codex timed out after 120s."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
 elif [ "$CODEX_EXIT" -ne 0 ]; then
   echo "Codex failed (exit $CODEX_EXIT)."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
@@ -141,7 +143,9 @@ Write the resume prompt, then call the script — it handles resume vs fresh-fal
 TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" \
   "/tmp/claude/ai-review-${REVIEW_ID}" "$CODEX_SESSION_ID" "$MODEL"
 CODEX_EXIT=$?
-if [ "$CODEX_EXIT" -eq 124 ]; then
+if [ "$CODEX_EXIT" -eq 77 ]; then
+  cat /tmp/claude/ai-review-${REVIEW_ID}/codex-output.md; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
+elif [ "$CODEX_EXIT" -eq 124 ]; then
   echo "Codex timed out — stopping."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
 elif [ "$CODEX_EXIT" -ne 0 ]; then
   echo "Codex failed (exit $CODEX_EXIT) — stopping."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1

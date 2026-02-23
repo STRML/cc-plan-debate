@@ -110,7 +110,7 @@ If there is no plan in the current context, ask the user to paste it or describe
 
 ```text
 Running parallel review with: codex, gemini, claude
-Timeout: codex/gemini 120s, opus 300s
+Timeout: codex 120s, gemini 240s, opus 300s
 ```
 
 Run `/debate:setup` to see the full permission allowlist and configure for unattended use.
@@ -125,12 +125,15 @@ Run `/debate:setup` to see the full permission allowlist and configure for unatt
 bash "$SCRIPT_DIR/run-parallel.sh" "$REVIEW_ID" "$TIMEOUT_BIN"
 ```
 
-The script is pre-built in the plugin — Codex and Gemini run with a 120s timeout, Opus runs with 300s (the `claude` CLI has more startup overhead). Session capture is handled inside each invoke-*.sh script.
+The script is pre-built in the plugin — Codex runs with 120s, Gemini with 240s, Opus with 300s (the `claude` CLI has more startup overhead). Session capture is handled inside each invoke-*.sh script.
+
+**Important:** this Bash call blocks until all reviewers complete (up to 300s for Opus). Use `timeout: 360000` on the Bash tool call to avoid the default 2-minute kill.
 
 ### Check exit codes
 
 Read each `*-exit.txt` file:
 - `0` → success
+- `77` → sandbox incompatible (Codex only — show message from `codex-output.md`, mark as unavailable, skip in synthesis)
 - `124` → timed out (mark reviewer as timed-out, skip in synthesis)
 - Other non-zero → error (mark as failed, note exit code)
 

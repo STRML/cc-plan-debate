@@ -48,8 +48,9 @@ fi
 if [ -z "${TIMEOUT_BIN:-}" ]; then
   TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
 fi
+GEMINI_TIMEOUT="${GEMINI_TIMEOUT:-240}"
 if [ -n "$TIMEOUT_BIN" ]; then
-  TIMEOUT_CMD=("$TIMEOUT_BIN" 120)
+  TIMEOUT_CMD=("$TIMEOUT_BIN" "$GEMINI_TIMEOUT")
 else
   TIMEOUT_CMD=()
 fi

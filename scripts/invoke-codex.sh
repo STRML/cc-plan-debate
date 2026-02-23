@@ -110,6 +110,27 @@ fi
 
 echo "$CODEX_EXIT" > "$WORK_DIR/codex-exit.txt"
 
+# Detect macOS sandbox panic — system-configuration crate crashes when
+# SCDynamicStoreCreate returns NULL (blocked by Claude Code sandbox entitlements).
+# Emit a clear message instead of a cryptic non-zero exit.
+if [ "$CODEX_EXIT" -ne 0 ] && grep -q "Attempted to create a NULL object" "$WORK_DIR/codex-stdout.txt" 2>/dev/null; then
+  {
+    echo "## Codex — Sandbox Incompatible"
+    echo ""
+    echo "Codex CLI panicked (exit $CODEX_EXIT) due to a macOS sandbox restriction."
+    echo ""
+    echo "The Codex binary uses the \`system-configuration\` Rust crate which calls"
+    echo "\`SCDynamicStoreCreate()\`. Inside the Claude Code sandbox this returns NULL,"
+    echo "causing a Rust panic. This is a Codex binary issue, not a plan issue."
+    echo ""
+    echo "Fix: add \`codex:*\` to \`sandbox.excludedCommands\` in ~/.claude/settings.json"
+    echo "     (run /debate:setup to see the exact snippet)"
+  } > "$WORK_DIR/codex-output.md"
+  echo "77" > "$WORK_DIR/codex-exit.txt"
+  : > "$WORK_DIR/codex-session-id.txt"
+  exit 77
+fi
+
 if [ "$CODEX_EXIT" -eq 0 ]; then
   if [ "$CALLED_RESUME" -eq 1 ]; then
     # Resume output is in stdout (no -o support); copy to standard output file

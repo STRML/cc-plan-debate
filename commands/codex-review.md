@@ -1,11 +1,13 @@
 ---
 description: Send the current plan to OpenAI Codex CLI for iterative review. Claude and Codex go back-and-forth until Codex approves or max 5 rounds reached.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/ai-review-:*), Bash(rm -rf /tmp/ai-review-:*), Bash(codex exec -m:*), Bash(codex exec resume:*), Bash(which codex:*), Bash(timeout:*), Bash(gtimeout:*)
+allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(timeout:*), Bash(gtimeout:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-codex.sh:*)
 ---
 
 # Codex Plan Review (Iterative)
 
 Send the current implementation plan to OpenAI Codex for review. Claude revises the plan based on Codex's feedback and re-submits until Codex approves. Max 5 rounds.
+
+Codex plays the role of **The Executor** — a pragmatic runtime tracer focused on shell correctness, exit codes, race conditions, and file I/O.
 
 ---
 
@@ -17,9 +19,9 @@ Before starting, verify Codex CLI is available:
 which codex
 ```
 
-If `codex` is not found, stop and display this message:
+If `codex` is not found, stop and display:
 
-```
+```text
 Codex CLI is not installed.
 
 Install it with:
@@ -35,84 +37,55 @@ After installing, re-run /debate:codex-review.
 
 **Model:** Check if a model argument was passed (e.g., `/debate:codex-review o4-mini`). If so, use it. Default: `gpt-5.3-codex`. Store as `MODEL`.
 
-**Timeout command:** Resolve once and build as an array — macOS ships `gtimeout` (coreutils), Linux ships `timeout`:
+**Script and timeout:**
 
 ```bash
+SCRIPT_DIR=~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts
 TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
-if [ -n "$TIMEOUT_BIN" ]; then
-  TIMEOUT_CMD=("$TIMEOUT_BIN" 120)
-else
-  echo "Warning: neither 'timeout' nor 'gtimeout' found. Install: brew install coreutils"
-  echo "Proceeding without timeout protection."
-  TIMEOUT_CMD=()
-fi
+[ -z "$TIMEOUT_BIN" ] && echo "Warning: timeout not found. Install: brew install coreutils"
 ```
-
-Invoke as `"${TIMEOUT_CMD[@]}" codex exec ...` — when `TIMEOUT_CMD` is empty this reduces to just `codex exec ...` with no timeout.
 
 **Session ID and temp dir:**
 
 ```bash
 REVIEW_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | head -c 8)
-mkdir -p /tmp/ai-review-${REVIEW_ID}
+mkdir -p /tmp/claude/ai-review-${REVIEW_ID}
 ```
 
-Temp file paths:
-- Plan file: `/tmp/ai-review-${REVIEW_ID}/plan.md`
-- Codex output: `/tmp/ai-review-${REVIEW_ID}/codex-output.md`
-- Codex stdout (for session ID): `/tmp/ai-review-${REVIEW_ID}/codex-stdout.txt`
+Temp directory: `/tmp/claude/ai-review-${REVIEW_ID}/`
+Key files: `plan.md`, `codex-output.md`, `codex-session-id.txt`, `codex-exit.txt`
 
-**Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/ai-review-${REVIEW_ID}` before stopping.
+**Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/claude/ai-review-${REVIEW_ID}` before stopping.
 
 ## Step 2: Capture the Plan
 
-Write the current plan to the temp file:
-
-1. Write the full plan content to `/tmp/ai-review-${REVIEW_ID}/plan.md`
+1. Write the full plan content to `/tmp/claude/ai-review-${REVIEW_ID}/plan.md`
 2. If there is no plan in the current context, ask the user what they want reviewed
 
 ## Step 3: Initial Review (Round 1)
 
-Run Codex in non-interactive mode. Capture stdout (for session ID) alongside the `-o` output:
+Run the Codex reviewer script (handles all codex flags, session capture, and retry logic internally):
 
 ```bash
-"${TIMEOUT_CMD[@]}" codex exec \
-  -m $MODEL \
-  -s read-only \
-  -o /tmp/ai-review-${REVIEW_ID}/codex-output.md \
-  "Review the implementation plan in /tmp/ai-review-${REVIEW_ID}/plan.md. Focus on:
-1. Correctness - Will this plan achieve the stated goals?
-2. Risks - What could go wrong? Edge cases? Data loss?
-3. Missing steps - Is anything forgotten?
-4. Alternatives - Is there a simpler or better approach?
-5. Security - Any security concerns?
-
-Be specific and actionable. If the plan is solid and ready to implement, end your review with exactly: VERDICT: APPROVED
-
-If changes are needed, end with exactly: VERDICT: REVISE" \
-  2>&1 | tee /tmp/ai-review-${REVIEW_ID}/codex-stdout.txt
-CODEX_EXIT=${PIPESTATUS[0]}
+TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" \
+  "/tmp/claude/ai-review-${REVIEW_ID}" "" "$MODEL"
+CODEX_EXIT=$?
+if [ "$CODEX_EXIT" -eq 124 ]; then
+  echo "Codex timed out after 120s."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
+elif [ "$CODEX_EXIT" -ne 0 ]; then
+  echo "Codex failed (exit $CODEX_EXIT)."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
+fi
+CODEX_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-session-id.txt 2>/dev/null || echo "")
 ```
 
-If `CODEX_EXIT` is `124`, Codex timed out — inform the user and stop.
-
-**Capture the Codex session ID:**
-```bash
-grep 'session id:' /tmp/ai-review-${REVIEW_ID}/codex-stdout.txt | head -1
-```
-Extract the UUID. Store as `CODEX_SESSION_ID`. You MUST use this exact ID to resume in subsequent rounds — do NOT use `--last`, which would grab the wrong session if multiple reviews are running concurrently.
-
-**Notes:**
-- Use `-m $MODEL` (resolved from args above; defaults to `gpt-5.3-codex`)
-- Use `-s read-only` so Codex can read the codebase for context but cannot modify anything
-- Use `-o` to capture the review output to a file for reliable reading
+The script writes the review to `codex-output.md` and the session ID to `codex-session-id.txt`.
 
 ## Step 4: Read Review & Check Verdict
 
-1. Read `/tmp/ai-review-${REVIEW_ID}/codex-output.md`
+1. Read `/tmp/claude/ai-review-${REVIEW_ID}/codex-output.md`
 2. Present Codex's review:
 
-```
+```text
 ## Codex Review — Round N (model: $MODEL)
 
 [Codex's feedback here]
@@ -128,18 +101,18 @@ Extract the UUID. Store as `CODEX_SESSION_ID`. You MUST use this exact ID to res
 
 Based on Codex's feedback:
 
-1. **Revise the plan** — address each issue Codex raised. Update the plan content in the conversation context and rewrite `/tmp/ai-review-${REVIEW_ID}/plan.md` with the revised version.
+1. **Revise the plan** — address each issue Codex raised. Update the plan content in the conversation context and rewrite `/tmp/claude/ai-review-${REVIEW_ID}/plan.md` with the revised version.
 2. **Write the revision summary to a file** (never compose this inline in a shell string):
 
 ```bash
-cat > /tmp/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
+cat > /tmp/claude/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
 [Write the revision bullets here before closing the heredoc]
 EOF
 ```
 
 3. Summarize changes for the user:
 
-```
+```text
 ### Revisions (Round N)
 - [What was changed and why, one bullet per Codex issue addressed]
 ```
@@ -148,33 +121,29 @@ EOF
 
 ## Step 6: Re-submit to Codex (Rounds 2–5)
 
-Resume the existing Codex session so it has full context of the prior review.
-
-Build the resume prompt from files — never interpolate dynamic content directly into a shell string:
+Write the resume prompt, then call the script — it handles resume vs fresh-fallback internally:
 
 ```bash
-# Write the resume prompt to a file
 {
-  echo "I've revised the plan based on your feedback. The updated plan is in /tmp/ai-review-${REVIEW_ID}/plan.md."
+  echo "I've revised the plan based on your feedback. The updated plan is in /tmp/claude/ai-review-${REVIEW_ID}/plan.md."
   echo ""
   echo "Here's what I changed:"
-  cat /tmp/ai-review-${REVIEW_ID}/revisions.txt
+  cat /tmp/claude/ai-review-${REVIEW_ID}/revisions.txt
   echo ""
   echo "Please re-review. If the plan is now solid and ready to implement, end with: VERDICT: APPROVED"
   echo "If more changes are needed, end with: VERDICT: REVISE"
-} > /tmp/ai-review-${REVIEW_ID}/resume-prompt.txt
+} > /tmp/claude/ai-review-${REVIEW_ID}/codex-prompt.txt
 
-RESUME_PROMPT=$(cat /tmp/ai-review-${REVIEW_ID}/resume-prompt.txt)
-"${TIMEOUT_CMD[@]}" codex exec resume ${CODEX_SESSION_ID} "$RESUME_PROMPT" \
-  2>&1 | tee /tmp/ai-review-${REVIEW_ID}/codex-stdout.txt
-CODEX_EXIT=${PIPESTATUS[0]}
+TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" \
+  "/tmp/claude/ai-review-${REVIEW_ID}" "$CODEX_SESSION_ID" "$MODEL"
+CODEX_EXIT=$?
+if [ "$CODEX_EXIT" -eq 124 ]; then
+  echo "Codex timed out — stopping."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
+elif [ "$CODEX_EXIT" -ne 0 ]; then
+  echo "Codex failed (exit $CODEX_EXIT) — stopping."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
+fi
+CODEX_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-session-id.txt 2>/dev/null || echo "")
 ```
-
-**Note:** `codex exec resume` does NOT support `-o`. Capture output from stdout.
-
-If `CODEX_EXIT` is non-zero or resume returns an error (session expired):
-- Fall back to a fresh `codex exec` call with a summary of prior rounds in the prompt (assembled via file, not inline)
-- After the fresh call, recapture `CODEX_SESSION_ID` from the new stdout — do NOT continue using the old session ID
 
 Then go back to **Step 4** (Read Review & Check Verdict).
 
@@ -182,7 +151,7 @@ Then go back to **Step 4** (Read Review & Check Verdict).
 
 Once approved (or max rounds reached):
 
-```
+```text
 ## Codex Review — Final (model: $MODEL)
 
 **Status:** ✅ Approved after N round(s)
@@ -195,7 +164,7 @@ Once approved (or max rounds reached):
 
 If max rounds were reached without approval:
 
-```
+```text
 ## Codex Review — Final (model: $MODEL)
 
 **Status:** ⚠️ Max rounds (5) reached — not fully approved
@@ -210,14 +179,12 @@ If max rounds were reached without approval:
 ## Step 8: Cleanup
 
 ```bash
-rm -rf /tmp/ai-review-${REVIEW_ID}
+rm -rf /tmp/claude/ai-review-${REVIEW_ID}
 ```
-
-If any step failed before reaching this step, still run this cleanup.
 
 ## Loop Summary
 
-```
+```text
 Round 1: Claude sends plan → Codex reviews → REVISE?
 Round 2: Claude revises → Codex re-reviews (resume session) → REVISE?
 Round 3: Claude revises → Codex re-reviews (resume session) → APPROVED ✅
@@ -227,11 +194,10 @@ Max 5 rounds. Each round preserves Codex's conversation context via session resu
 
 ## Rules
 
-- Claude **actively revises the plan** based on Codex feedback between rounds — this is NOT just passing messages, Claude should make real improvements
+- Claude **actively revises the plan** based on Codex feedback between rounds — not just passing messages
 - Default model is `gpt-5.3-codex`. Accept model override from the user's arguments (e.g., `/debate:codex-review o4-mini`)
 - Always use read-only sandbox mode — Codex should never write files
 - Max 5 review rounds to prevent infinite loops
 - Show the user each round's feedback and revisions so they can follow along
 - Never interpolate AI-generated text directly into shell strings — always build via file operations
-- If Codex CLI is not installed or fails, inform the user and suggest `npm install -g @openai/codex`
 - If a revision contradicts the user's explicit requirements, skip that revision and note it for the user

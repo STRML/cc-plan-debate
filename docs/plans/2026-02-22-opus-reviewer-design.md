@@ -189,30 +189,36 @@ Fewer-than-2 guard still applies. Debate phase requires ≥2 reviewers.
 ### 1c. Temp files
 
 Add:
-- Opus raw JSON: `/tmp/ai-review-${REVIEW_ID}/opus-raw.json`
-- Opus output: `/tmp/ai-review-${REVIEW_ID}/opus-output.md`
-- Opus exit code: `/tmp/ai-review-${REVIEW_ID}/opus-exit.txt`
+- Opus raw JSON: `/tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json`
+- Opus output: `/tmp/claude/ai-review-${REVIEW_ID}/opus-output.md`
+- Opus exit code: `/tmp/claude/ai-review-${REVIEW_ID}/opus-exit.txt`
 
 ### Runner script — Opus block
 
 Add after the Gemini block:
 
+> **Implementation note:** The snippet below uses `${OPUS_TIMEOUT_CMD[@]}` (a pre-built array of `["timeout", "300"]`). The actual implementation diverged to use a shared `TIMEOUT_BIN` env-var pattern instead — each `invoke-*.sh` script receives `TIMEOUT_BIN` and builds its own timeout array internally (Codex/Gemini: 120s, Opus: 300s). This avoids callers having to construct per-reviewer arrays and keeps the runner script simpler.
+
 ```bash
 if which claude > /dev/null 2>&1 && which jq > /dev/null 2>&1; then
   (
     unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-    "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
+    "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
       --model claude-opus-4-6 \
+      --effort medium \
       --tools "" \
       --disable-slash-commands \
       --strict-mcp-config \
       --settings '{"disableAllHooks":true}' \
       --output-format json \
-      "You are The Skeptic. Review the implementation plan in /tmp/ai-review-${REVIEW_ID}/plan.md. ..." \
-      > /tmp/ai-review-${REVIEW_ID}/opus-raw.json
-    echo "$?" > /tmp/ai-review-${REVIEW_ID}/opus-exit.txt
-    jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
-      > /tmp/ai-review-${REVIEW_ID}/opus-output.md
+      "You are The Skeptic. Review the implementation plan in /tmp/claude/ai-review-${REVIEW_ID}/plan.md. ..." \
+      > /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json
+    OPUS_EXIT=$?
+    echo "$OPUS_EXIT" > /tmp/claude/ai-review-${REVIEW_ID}/opus-exit.txt
+    if [ "$OPUS_EXIT" -eq 0 ]; then
+      jq -r '.result // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json \
+        > /tmp/claude/ai-review-${REVIEW_ID}/opus-output.md
+    fi
   ) &
   PIDS+=($!)
 fi
@@ -222,7 +228,7 @@ fi
 
 After runner completes, parse from the JSON output (no stderr in JSON mode):
 ```bash
-OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)
+OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json)
 ```
 Store as `OPUS_SESSION_ID`. Guard all resume calls: `[ -n "$OPUS_SESSION_ID" ]`.
 
@@ -242,15 +248,16 @@ Up to three pairwise debates. Each targeted question goes to both parties in the
 ```bash
 if [ -n "$OPUS_SESSION_ID" ]; then
   unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-  "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" \
-    -p "$(cat /tmp/ai-review-${REVIEW_ID}/opus-debate-prompt.txt)" \
+  "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" \
+    -p "$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-prompt.txt)" \
+    --effort medium \
     --tools "" --disable-slash-commands --strict-mcp-config \
     --settings '{"disableAllHooks":true}' --output-format json \
-    > /tmp/ai-review-${REVIEW_ID}/opus-debate-raw.json
+    > /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json
   RESUME_EXIT=$?
   if [ "$RESUME_EXIT" -eq 0 ]; then
-    jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-debate-raw.json
-    NEW_SID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-debate-raw.json)
+    jq -r '.result // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json
+    NEW_SID=$(jq -r '.session_id // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json)
     [ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
   fi
 else

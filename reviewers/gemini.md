@@ -8,8 +8,9 @@ install_command: npm install -g @google/gemini-cli
 
 # Gemini Reviewer Definition
 
-This file defines how to use the Google Gemini CLI as a plan reviewer.
-Claude reads these instructions and interpolates `{placeholder}` values at runtime.
+**The Architect** — systems architect reviewing for structural integrity.
+
+Focus areas: approach validity, over-engineering, missing phases, graceful degradation, alternatives.
 
 ## Availability Check
 
@@ -17,43 +18,28 @@ Claude reads these instructions and interpolates `{placeholder}` values at runti
 which gemini
 ```
 
-## Initial Review
+## Invocation
 
-Plan content is passed via stdin redirect — never inlined in the shell command string.
-The `-p` prompt contains only fixed instruction text.
-
-```bash
-gemini \
-  -p "You are The Architect — a systems architect reviewing for structural integrity. Review this implementation plan (provided via stdin). Think big picture before line-by-line. Focus on:
-1. Approach validity — is this the right solution to the actual problem?
-2. Over-engineering — what could be simplified or removed?
-3. Missing phases — is anything structurally absent from the flow?
-4. Graceful degradation — does the design hold when parts fail?
-5. Alternatives — is there a meaningfully better approach?
-
-Be specific and actionable. If the plan is solid, end with: VERDICT: APPROVED
-If changes are needed, end with: VERDICT: REVISE" \
-  -m {model} \
-  -s \
-  -e "" \
-  < {plan_file} \
-  > {output_file}
-```
-
-**Session index capture:** After the initial call, run:
-```bash
-gemini --list-sessions | head -3
-```
-Capture the most recent session index. Store as `GEMINI_SESSION_IDX_{reviewer_name}`.
-Use this explicit index for resume — do NOT use `--resume latest` which is race-prone.
-
-## Session Resume
+All Gemini calls go through `scripts/invoke-gemini.sh`. The script handles:
+- Model flags (`-m $MODEL -s -e ""`)
+- Plan passed via stdin redirect (`< plan.md`)
+- Session UUID capture via `--list-sessions` diff (before/after with 5s timeout guard)
+- Resume with fallback to fresh call on failure
 
 ```bash
-gemini --resume {session_index} -p "{prompt}" -s -e "" 2>&1
+TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-gemini.sh" \
+  "$WORK_DIR" [session_uuid] [model]
 ```
 
-## Output
+## Prompt Files
 
-- Initial review: written to `{output_file}` via stdout redirect
-- Resume output: read from stdout
+- **Initial review:** no prompt file needed — script uses hardcoded Architect persona
+- **Resume/debate:** write prompt to `$WORK_DIR/gemini-prompt.txt` before calling script
+
+## Output Files
+
+| File | Contents |
+|------|----------|
+| `gemini-output.md` | Review text |
+| `gemini-session-id.txt` | Session UUID for next resume (empty on failure) |
+| `gemini-exit.txt` | Exit code |

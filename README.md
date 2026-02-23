@@ -1,6 +1,6 @@
 # debate
 
-Get a second (and third) opinion on your implementation plan. The `debate` plugin sends your plan to OpenAI Codex and Google Gemini simultaneously, synthesizes their feedback, and has them argue out any disagreements — so you get independent review plus a consensus verdict before writing a line of code.
+Get a second (and third, and fourth) opinion on your implementation plan. The `debate` plugin sends your plan to OpenAI Codex, Google Gemini, and Claude Opus simultaneously, synthesizes their feedback, and has them argue out any disagreements — so you get independent review plus a consensus verdict before writing a line of code.
 
 ## Quick Start
 
@@ -23,31 +23,37 @@ Restart Claude Code after installing.
 ```
 You: /debate:all
 
-Claude: ✅ codex  ✅ gemini  — launching parallel review...
+Claude: ✅ codex  ✅ gemini  ✅ opus  — launching parallel review...
 
-  [Codex and Gemini review your plan simultaneously]
+  [Codex, Gemini, and Opus review your plan simultaneously]
 
-  ## Codex Review — Round 1
+  ## Codex Review — Round 1        [The Executor]
   The retry logic in Step 4 doesn't handle the case where...
   VERDICT: REVISE
 
-  ## Gemini Review — Round 1
+  ## Gemini Review — Round 1       [The Architect]
   Missing error handling when the API is unavailable...
   VERDICT: REVISE
 
+  ## Opus Review — Round 1         [The Skeptic]
+  Unstated assumption: this plan assumes the temp directory is writable...
+  VERDICT: REVISE
+
   ## Synthesis
-  Unanimous: both reviewers flagged missing error handling
+  Unanimous: all reviewers flagged missing error handling
   Unique to Codex: retry logic gap in Step 4
+  Unique to Opus: temp directory writability assumption
   Contradictions: none
 
   ## Final Report
-  VERDICT: REVISE — 2 issues to address before implementation
+  VERDICT: REVISE — 3 issues to address before implementation
 
 Claude: Revising plan... [updates the plan]
-Claude: Sending revised plan back to both reviewers...
+Claude: Sending revised plan back to all reviewers...
 
   ## Codex Review — Round 2  →  VERDICT: APPROVED ✅
   ## Gemini Review — Round 2  →  VERDICT: APPROVED ✅
+  ## Opus Review — Round 2   →  VERDICT: APPROVED ✅
 
   ## Final Report — Round 2 of 3
   VERDICT: APPROVED — unanimous
@@ -61,6 +67,7 @@ Claude: Sending revised plan back to both reviewers...
 | `/debate:all` | All available reviewers in parallel + synthesis + debate |
 | `/debate:codex-review` | Single-reviewer Codex loop (up to 5 rounds) |
 | `/debate:gemini-review` | Single-reviewer Gemini loop (up to 5 rounds) |
+| `/debate:opus-review` | Single-reviewer Opus loop (up to 5 rounds) |
 
 ## Installation
 
@@ -99,6 +106,17 @@ npm install -g @google/gemini-cli
 gemini auth
 ```
 
+### Claude Opus (for `/debate:opus-review` and `/debate:all`)
+
+The `claude` CLI is part of Claude Code itself, so it's already installed if you're running this plugin. You also need `jq` to parse its JSON output:
+
+```bash
+brew install jq          # macOS
+apt install jq           # Linux
+```
+
+No API key is required — the `claude` CLI uses Claude Code's stored OAuth credentials automatically.
+
 ### GNU timeout — macOS only
 
 macOS doesn't ship `timeout`. Without it the 120s per-reviewer timeout is disabled:
@@ -136,6 +154,15 @@ Same workflow with Gemini.
 /debate:gemini-review gemini-2.0-flash
 ```
 
+### `/debate:opus-review [model]`
+
+Iterative loop with Claude Opus as **The Skeptic** — focused on unstated assumptions, unhappy paths, second-order failures, and security. Uses session resume to maintain context across rounds.
+
+```
+/debate:opus-review
+/debate:opus-review claude-opus-4-5
+```
+
 ## Unattended / No-Prompt Use
 
 Each command declares its tool permissions in frontmatter, so Claude Code will ask once per session and remember. To approve permanently across all sessions, run `/debate:setup` to get the exact JSON snippet to add to `~/.claude/settings.json`.
@@ -154,8 +181,14 @@ Codex sessions expire after a period of inactivity. The commands automatically f
 **Gemini session not found after review**
 The session UUID diff uses `gemini --list-sessions` before and after the review call. If sessions shift concurrently (multiple Gemini processes), the diff may be ambiguous and the command falls back to non-resume mode for subsequent rounds.
 
+**Opus exits with "Claude Code cannot be launched inside another Claude Code session"**
+This means the nested-session guard wasn't applied. The commands handle this automatically via `unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT` — if you see this error, ensure you're running the latest version of the plugin.
+
+**Opus review requires `jq`**
+The `claude` CLI outputs JSON and requires `jq` to extract the review text and session ID. Install with `brew install jq` (macOS) or `apt install jq` (Linux).
+
 **Only one reviewer available**
-Both single-reviewer commands (`/debate:codex-review`, `/debate:gemini-review`) and `/debate:all` work with a single reviewer. With only one reviewer, `/debate:all` skips the debate phase.
+Single-reviewer commands (`/debate:codex-review`, `/debate:gemini-review`, `/debate:opus-review`) and `/debate:all` all work with any subset of reviewers available. With fewer reviewers, `/debate:all` skips any unavailable reviewer and may skip the debate phase if only one succeeds.
 
 ## Security
 
@@ -164,6 +197,7 @@ Both single-reviewer commands (`/debate:codex-review`, `/debate:gemini-review`) 
 - Codex runs with `-s read-only` — can read the codebase for context but cannot write files
 - Gemini runs with `-s` (sandbox) — cannot execute shell commands
 - Gemini runs with `-e ""` — extensions and skills are disabled for each review call
+- Opus runs with `--tools ""` — no tool access; `--disable-slash-commands`; `--strict-mcp-config`; hooks disabled — read-only, stateless review
 
 ## Custom Reviewers
 

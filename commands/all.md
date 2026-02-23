@@ -1,6 +1,6 @@
 ---
 description: Run ALL available AI reviewers in parallel on the current plan, synthesize their feedback, debate contradictions, and produce a consensus verdict. Supports Codex, Gemini, and Claude Opus with graceful fallback if any are unavailable.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(codex exec -m:*), Bash(codex exec resume:*), Bash(gemini -p:*), Bash(gemini --list-sessions:*), Bash(gemini --resume:*), Bash(claude -p:*), Bash(claude --resume:*), Bash(timeout:*), Bash(gtimeout:*), Bash(diff:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/run-parallel.sh:*), Write(/tmp/claude/ai-review-*)
+allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(cat:*), Bash(timeout:*), Bash(gtimeout:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/run-parallel.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-codex.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-opus.sh:*), Write(/tmp/claude/ai-review-*)
 ---
 
 # AI Multi-Model Plan Review
@@ -66,21 +66,16 @@ If this fails, warn: `Gemini is not authenticated — run: gemini auth`
 
 ### 1b. Resolve timeout command
 
-Resolve once and build as an array — macOS ships `gtimeout` (coreutils), Linux ships `timeout`:
+Resolve the timeout binary — macOS ships `gtimeout` (coreutils), Linux ships `timeout`. Pass as `TIMEOUT_BIN` env var to all invoke scripts; each script builds its own timeout command internally:
 
 ```bash
+SCRIPT_DIR=~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts
 TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
-if [ -n "$TIMEOUT_BIN" ]; then
-  TIMEOUT_CMD=("$TIMEOUT_BIN" 120)
-else
-  echo "Warning: neither 'timeout' nor 'gtimeout' found."
-  echo "Install with: brew install coreutils"
-  echo "Proceeding without timeout protection."
-  TIMEOUT_CMD=()
-fi
+[ -z "$TIMEOUT_BIN" ] && echo "Warning: neither 'timeout' nor 'gtimeout' found. Install: brew install coreutils"
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.3-codex}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.1-pro-preview}"
+OPUS_MODEL="${OPUS_MODEL:-claude-opus-4-6}"
 ```
-
-Invoke as `"${TIMEOUT_CMD[@]}" codex exec ...` — when `TIMEOUT_CMD` is empty this reduces to just `codex exec ...`.
 
 ### 1c. Generate session ID & temp dir
 
@@ -92,15 +87,15 @@ mkdir -p /tmp/claude/ai-review-${REVIEW_ID}
 Temp file paths:
 - Plan: `/tmp/claude/ai-review-${REVIEW_ID}/plan.md`
 - Codex output: `/tmp/claude/ai-review-${REVIEW_ID}/codex-output.md`
-- Codex stdout (for session ID): `/tmp/claude/ai-review-${REVIEW_ID}/codex-stdout.txt`
 - Codex exit code: `/tmp/claude/ai-review-${REVIEW_ID}/codex-exit.txt`
+- Codex session ID: `/tmp/claude/ai-review-${REVIEW_ID}/codex-session-id.txt`
 - Gemini output: `/tmp/claude/ai-review-${REVIEW_ID}/gemini-output.md`
 - Gemini exit code: `/tmp/claude/ai-review-${REVIEW_ID}/gemini-exit.txt`
+- Gemini session UUID: `/tmp/claude/ai-review-${REVIEW_ID}/gemini-session-id.txt`
 - Opus JSON (raw): `/tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json`
 - Opus output: `/tmp/claude/ai-review-${REVIEW_ID}/opus-output.md`
 - Opus exit code: `/tmp/claude/ai-review-${REVIEW_ID}/opus-exit.txt`
-- Sessions before: `/tmp/claude/ai-review-${REVIEW_ID}/sessions-before.txt`
-- Sessions after: `/tmp/claude/ai-review-${REVIEW_ID}/sessions-after.txt`
+- Opus session ID: `/tmp/claude/ai-review-${REVIEW_ID}/opus-session-id.txt`
 
 **Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/claude/ai-review-${REVIEW_ID}` before stopping.
 
@@ -123,18 +118,13 @@ Run `/debate:setup` to see the full permission allowlist and configure for unatt
 
 ## Step 2: Parallel Review (Round N)
 
-**Snapshot Gemini sessions before launch:**
-```bash
-gemini --list-sessions 2>/dev/null > /tmp/claude/ai-review-${REVIEW_ID}/sessions-before.txt
-```
-
 **Execute the parallel runner script** from the plugin:
 
 ```bash
 bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/run-parallel.sh "$REVIEW_ID" "$TIMEOUT_BIN"
 ```
 
-The script is pre-built in the plugin — Codex and Gemini run with a 120s timeout, Opus runs with 300s (the `claude` CLI has more startup overhead).
+The script is pre-built in the plugin — Codex and Gemini run with a 120s timeout, Opus runs with 300s (the `claude` CLI has more startup overhead). Session capture is handled inside each invoke-*.sh script.
 
 ### Check exit codes
 
@@ -144,7 +134,7 @@ Read each `*-exit.txt` file:
 - Other non-zero → error (mark as failed, note exit code)
 
 **If all reviewers timed out or failed:**
-```
+```text
 ## AI Review — UNDECIDED
 
 All reviewers failed or timed out. No synthesis is possible.
@@ -156,27 +146,12 @@ Options:
 ```
 Then clean up and exit.
 
-**Capture Codex session ID** from stdout:
+**Capture session IDs** from the files written by each invoke script:
 ```bash
-grep 'session id:' /tmp/claude/ai-review-${REVIEW_ID}/codex-stdout.txt | head -1
+CODEX_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-session-id.txt 2>/dev/null || echo "")
+GEMINI_SESSION_UUID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-session-id.txt 2>/dev/null || echo "")
+OPUS_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-session-id.txt 2>/dev/null || echo "")
 ```
-Extract the UUID. Store as `CODEX_SESSION_ID`.
-
-**Capture Gemini session UUID** by diffing the session list:
-```bash
-gemini --list-sessions 2>/dev/null > /tmp/claude/ai-review-${REVIEW_ID}/sessions-after.txt
-diff /tmp/claude/ai-review-${REVIEW_ID}/sessions-before.txt \
-     /tmp/claude/ai-review-${REVIEW_ID}/sessions-after.txt
-```
-Find the new entry and parse its UUID from the `[uuid]` field. Store as `GEMINI_SESSION_UUID`.
-
-If the diff shows multiple new sessions (concurrent usage), prefer the one whose title most closely matches the plan. If still ambiguous, set `GEMINI_SESSION_UUID=""` — resume will fall back to a fresh call if needed.
-
-**Capture Opus session ID** from JSON output:
-```bash
-OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json 2>/dev/null || echo "")
-```
-Store as `OPUS_SESSION_ID`. If the file doesn't exist or jq fails, set to `""`.
 
 ---
 
@@ -250,10 +225,18 @@ For each contradiction, send a targeted question to each reviewer in the disagre
   echo "[Reviewer] raised a concern about [topic]: [their position]."
   echo "You said: [Codex's position]."
   echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
-} > /tmp/claude/ai-review-${REVIEW_ID}/codex-debate-prompt.txt
+} > /tmp/claude/ai-review-${REVIEW_ID}/codex-prompt.txt
 
-DEBATE_PROMPT=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-debate-prompt.txt)
-"${TIMEOUT_CMD[@]}" codex exec resume ${CODEX_SESSION_ID} "$DEBATE_PROMPT" 2>&1 | tail -80
+TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" \
+  "/tmp/claude/ai-review-${REVIEW_ID}" "${CODEX_SESSION_ID}" "${CODEX_MODEL}"
+DEBATE_EXIT=$?
+if [ "$DEBATE_EXIT" -eq 0 ]; then
+  cat /tmp/claude/ai-review-${REVIEW_ID}/codex-output.md
+  CODEX_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-session-id.txt 2>/dev/null || echo "")
+else
+  echo "⚠️ Codex debate call failed (exit $DEBATE_EXIT) — skipping Codex debate response."
+  CODEX_SESSION_ID=""
+fi
 ```
 
 ```bash
@@ -262,10 +245,18 @@ DEBATE_PROMPT=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-debate-prompt.txt)
   echo "[Reviewer] raised a concern about [topic]: [their position]."
   echo "You said: [Gemini's position]."
   echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
-} > /tmp/claude/ai-review-${REVIEW_ID}/gemini-debate-prompt.txt
+} > /tmp/claude/ai-review-${REVIEW_ID}/gemini-prompt.txt
 
-DEBATE_PROMPT=$(cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-debate-prompt.txt)
-"${TIMEOUT_CMD[@]}" gemini --resume $GEMINI_SESSION_UUID -p "$DEBATE_PROMPT" -s -e "" 2>&1
+TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-gemini.sh" \
+  "/tmp/claude/ai-review-${REVIEW_ID}" "${GEMINI_SESSION_UUID}" "${GEMINI_MODEL}"
+DEBATE_EXIT=$?
+if [ "$DEBATE_EXIT" -eq 0 ]; then
+  cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-output.md
+  GEMINI_SESSION_UUID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-session-id.txt 2>/dev/null || echo "")
+else
+  echo "⚠️ Gemini debate call failed (exit $DEBATE_EXIT) — skipping Gemini debate response."
+  GEMINI_SESSION_UUID=""
+fi
 ```
 
 ```bash
@@ -274,36 +265,17 @@ DEBATE_PROMPT=$(cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-debate-prompt.txt)
   echo "[Reviewer] raised a concern about [topic]: [their position]."
   echo "You said: [Opus's position]."
   echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
-} > /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-prompt.txt
+} > /tmp/claude/ai-review-${REVIEW_ID}/opus-prompt.txt
 
-DEBATE_PROMPT=$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-prompt.txt)
-if [ -n "$OPUS_SESSION_ID" ]; then
-  unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-  "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" \
-    -p "$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-prompt.txt)" \
-    --tools "" --disable-slash-commands --strict-mcp-config \
-    --settings '{"disableAllHooks":true}' --output-format json \
-    > /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json
-  RESUME_EXIT=$?
-  if [ "$RESUME_EXIT" -eq 0 ]; then
-    jq -r '.result // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json
-    NEW_SID=$(jq -r '.session_id // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json)
-    [ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
-  else
-    echo "⚠️ Opus debate resume failed (exit $RESUME_EXIT) — skipping Opus debate response."
-    OPUS_SESSION_ID=""
-  fi
+TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-opus.sh" \
+  "/tmp/claude/ai-review-${REVIEW_ID}" "$OPUS_SESSION_ID" "${OPUS_MODEL}"
+DEBATE_EXIT=$?
+if [ "$DEBATE_EXIT" -eq 0 ]; then
+  cat /tmp/claude/ai-review-${REVIEW_ID}/opus-output.md
+  OPUS_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-session-id.txt 2>/dev/null || echo "")
 else
-  # Fall back to fresh call; recapture OPUS_SESSION_ID from .session_id
-  unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-  "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
-    "$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-prompt.txt)" \
-    --model claude-opus-4-6 \
-    --tools "" --disable-slash-commands --strict-mcp-config \
-    --settings '{"disableAllHooks":true}' --output-format json \
-    > /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json
-  jq -r '.result // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json
-  OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json)
+  echo "⚠️ Opus debate call failed (exit $DEBATE_EXIT) — skipping Opus debate response."
+  OPUS_SESSION_ID=""
 fi
 ```
 
@@ -363,8 +335,7 @@ VERDICT: SPLIT — Reviewers disagree. [Summary]. Claude recommends: [proceed/re
    - [What was changed and why]
    ```
 4. Rewrite `/tmp/claude/ai-review-${REVIEW_ID}/plan.md` with the revised plan
-5. Snapshot Gemini sessions before re-launch
-6. Return to **Step 2** with incremented round counter
+5. Return to **Step 2** with incremented round counter
 
 If max rounds (3) reached without unanimous approval:
 
@@ -396,14 +367,13 @@ If any step failed before reaching this step, still run this cleanup.
 
 - **Security:** Never inline plan content or AI-generated text in shell strings — pass via file path, stdin redirect, or `$(cat file)` with a pre-written temp file
 - **Parallelism:** Execute the static runner script from the plugin (`scripts/run-parallel.sh`) — it manages job control and PID capture correctly. Never write a runner script dynamically.
-- **Timeout array:** Always resolve `TIMEOUT_CMD` as an array at setup; use `"${TIMEOUT_CMD[@]}"` to invoke — empty array means no timeout, not a broken command
-- **Exit codes:** Use `${PIPESTATUS[0]}` after Codex pipelines (pipeline starts with timeout); use `$?` directly after Gemini (stdin redirect, single command); use `$?` directly after Claude (single command)
+- **Timeout binary:** Resolve `TIMEOUT_BIN` at setup; pass as `TIMEOUT_BIN="$TIMEOUT_BIN"` env prefix to all `bash "$SCRIPT_DIR/invoke-*.sh"` calls — each script builds its own timeout command internally
+- **Exit codes:** Check `$?` after each `bash "$SCRIPT_DIR/invoke-*.sh"` call — the script propagates the reviewer's exit code
 - **Graceful degradation:** If only 1 reviewer is available, run the full flow and skip the debate phase
 - **All-fail handling:** If all reviewers fail/timeout, return `UNDECIDED` with retry guidance
-- **Session tracking:** Always recapture session IDs after fallback fresh calls — never reuse stale IDs
-- **Gemini sessions:** Always use UUID from `--list-sessions` diff; if ambiguous, fall back to fresh call
-- **Opus sessions:** Parse `OPUS_SESSION_ID` via `jq -r '.session_id'` from JSON output; always guard `--resume "$OPUS_SESSION_ID"` with `[ -n "$OPUS_SESSION_ID" ]`
-- **Opus nested sessions:** Always `unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT` inside the subshell before any `claude` invocation
+- **Session tracking:** Always recapture session IDs from `*-session-id.txt` after each invoke script call — stale IDs cause silent failures on next resume; each script handles fallback internally
+- **Opus session ID:** Read `OPUS_SESSION_ID` from `opus-session-id.txt` (written by invoke-opus.sh); script guards `--resume` with `[ -n "$OPUS_SESSION_ID" ]` internally
+- **Opus nested sessions:** `invoke-opus.sh` handles `unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT` and `CLAUDE_CODE_SIMPLE=1` internally
 - **Opus jq dependency:** Skip Claude reviewer if `jq` is not installed; show install guidance
 - **Debate guard:** Explicitly skip Step 5 if fewer than 2 reviewers succeeded
 - **Revision discipline:** Make real plan improvements, not cosmetic changes

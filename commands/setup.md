@@ -1,6 +1,6 @@
 ---
 description: Check debate plugin prerequisites, verify reviewers are installed and authenticated, and print the exact settings.json snippet for fully unattended (no-prompt) operation.
-allowed-tools: Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(command -v:*), Bash(codex --version:*), Bash(claude --version:*), Bash(timeout 30 gemini:*)
+allowed-tools: Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(command -v:*), Bash(codex --version:*), Bash(claude --version:*), Bash(timeout 30 gemini:*), Bash(grep -q:*), Bash(jq -e:*)
 ---
 
 # debate — Setup & Permission Check
@@ -100,6 +100,41 @@ If missing, show the exact snippet to add:
   "excludedCommands": ["codex:*"]
 }
 ```
+
+## Step 3d: Check analytics opt-out
+
+Codex and Gemini send analytics/telemetry by default. Check that opt-out config is in place.
+
+**Codex** — check `~/.codex/config.toml` for `[analytics] enabled = false`:
+
+```bash
+grep -q 'enabled = false' "$HOME/.codex/config.toml" 2>/dev/null && echo "analytics disabled" || echo "analytics NOT disabled"
+```
+
+Report:
+- Found → `✅ codex: analytics disabled`
+- Not found → `⚠️ codex: analytics may be enabled — add to ~/.codex/config.toml:`
+  ```toml
+  [analytics]
+  enabled = false
+
+  [otel]
+  exporter = "none"
+  ```
+
+**Gemini** — check `~/.gemini/settings.json` for `usageStatisticsEnabled: false`:
+
+```bash
+jq -e '.privacy.usageStatisticsEnabled == false' "$HOME/.gemini/settings.json" > /dev/null 2>&1
+```
+
+Report:
+- Exit 0 → `✅ gemini: usage statistics disabled`
+- Non-zero → `⚠️ gemini: usage statistics may be enabled — add to ~/.gemini/settings.json:`
+  ```json
+  "privacy": { "usageStatisticsEnabled": false },
+  "telemetry": { "enabled": false }
+  ```
 
 ## Step 4: Check timeout binary
 

@@ -90,7 +90,12 @@ if [ -n "$SESSION_UUID" ]; then
     > "$WORK_DIR/gemini-output.md" 2>&1
   GEMINI_EXIT=$?
 
-  if [ "$GEMINI_EXIT" -ne 0 ]; then
+  if [ "$GEMINI_EXIT" -eq 124 ]; then
+    echo "invoke-gemini.sh: resume timed out (exit 124) — not falling back" >&2
+    echo "124" > "$WORK_DIR/gemini-exit.txt"
+    : > "$WORK_DIR/gemini-session-id.txt"
+    exit 124
+  elif [ "$GEMINI_EXIT" -ne 0 ]; then
     echo "invoke-gemini.sh: resume failed (exit $GEMINI_EXIT) — falling back to fresh call" >&2
     SESSION_UUID=""
   fi

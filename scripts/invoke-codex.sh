@@ -77,7 +77,12 @@ if [ -n "$SESSION_ID" ]; then
     2>&1 | tee "$WORK_DIR/codex-stdout.txt"
   CODEX_EXIT=${PIPESTATUS[0]}
 
-  if [ "$CODEX_EXIT" -eq 0 ]; then
+  if [ "$CODEX_EXIT" -eq 124 ]; then
+    echo "invoke-codex.sh: resume timed out (exit 124) — not falling back" >&2
+    echo "124" > "$WORK_DIR/codex-exit.txt"
+    : > "$WORK_DIR/codex-session-id.txt"
+    exit 124
+  elif [ "$CODEX_EXIT" -eq 0 ]; then
     CALLED_RESUME=1
   else
     echo "invoke-codex.sh: resume failed (exit $CODEX_EXIT) — falling back to fresh call" >&2

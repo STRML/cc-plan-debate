@@ -16,6 +16,10 @@ WORK_DIR="/tmp/claude/ai-review-${REVIEW_ID}"
 
 mkdir -p "$WORK_DIR" || { echo "Failed to create $WORK_DIR" >&2; exit 1; }
 
+# Clear any leftover *-prompt.txt files from a prior debate phase so they
+# don't bleed into this fresh parallel review round.
+rm -f "$WORK_DIR"/codex-prompt.txt "$WORK_DIR"/gemini-prompt.txt "$WORK_DIR"/opus-prompt.txt
+
 # Timeouts are managed per-reviewer inside each invoke-*.sh script:
 # Codex/Gemini: 120s, Opus: 300s (claude CLI startup adds overhead).
 # TIMEOUT_BIN is passed via env to each subshell.
@@ -23,21 +27,21 @@ mkdir -p "$WORK_DIR" || { echo "Failed to create $WORK_DIR" >&2; exit 1; }
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PIDS=()
 
-if which codex > /dev/null 2>&1; then
+if command -v codex > /dev/null 2>&1; then
   (
     TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" "$WORK_DIR"
   ) &
   PIDS+=($!)
 fi
 
-if which gemini > /dev/null 2>&1; then
+if command -v gemini > /dev/null 2>&1; then
   (
     TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-gemini.sh" "$WORK_DIR"
   ) &
   PIDS+=($!)
 fi
 
-if which claude > /dev/null 2>&1 && which jq > /dev/null 2>&1; then
+if command -v claude > /dev/null 2>&1 && command -v jq > /dev/null 2>&1; then
   (
     TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-opus.sh" "$WORK_DIR"
   ) &

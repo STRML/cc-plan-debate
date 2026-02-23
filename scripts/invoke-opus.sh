@@ -89,7 +89,12 @@ if [ -n "$SESSION_ID" ]; then
     > "$WORK_DIR/opus-raw.json"
   OPUS_EXIT=$?
 
-  if [ "$OPUS_EXIT" -ne 0 ]; then
+  if [ "$OPUS_EXIT" -eq 124 ]; then
+    echo "invoke-opus.sh: resume timed out (exit 124) — not falling back" >&2
+    echo "124" > "$WORK_DIR/opus-exit.txt"
+    : > "$WORK_DIR/opus-session-id.txt"
+    exit 124
+  elif [ "$OPUS_EXIT" -ne 0 ]; then
     echo "invoke-opus.sh: resume failed (exit $OPUS_EXIT) — falling back to fresh call" >&2
     SESSION_ID=""
   fi

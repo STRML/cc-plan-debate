@@ -111,9 +111,9 @@ if [ -z "$SESSION_ID" ]; then
 fi
 
 if [ "$OPUS_EXIT" -eq 0 ]; then
-  jq -r '.result // ""' "$WORK_DIR/opus-raw.json" > "$WORK_DIR/opus-output.md" 2>/dev/null
+  jq -r '.result // ""' "$WORK_DIR/opus-raw.json" > "$WORK_DIR/opus-output.md"
   JQ_EXIT=$?
-  if [ "$JQ_EXIT" -ne 0 ] || ! jq -e '.result' "$WORK_DIR/opus-raw.json" > /dev/null 2>&1; then
+  if [ "$JQ_EXIT" -ne 0 ]; then
     echo "invoke-opus.sh: failed to parse JSON from claude output" >&2
     OPUS_EXIT=1
     : > "$WORK_DIR/opus-output.md"

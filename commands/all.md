@@ -1,6 +1,6 @@
 ---
 description: Run ALL available AI reviewers in parallel on the current plan, synthesize their feedback, debate contradictions, and produce a consensus verdict. Supports Codex, Gemini, and Claude Opus with graceful fallback if any are unavailable.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(timeout:*), Bash(gtimeout:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/run-parallel.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-codex.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-opus.sh:*), Write(/tmp/claude/ai-review-*)
+allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(cat:*), Bash(timeout:*), Bash(gtimeout:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/run-parallel.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-codex.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-opus.sh:*), Write(/tmp/claude/ai-review-*)
 ---
 
 # AI Multi-Model Plan Review
@@ -72,6 +72,9 @@ Resolve the timeout binary — macOS ships `gtimeout` (coreutils), Linux ships `
 SCRIPT_DIR=~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts
 TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
 [ -z "$TIMEOUT_BIN" ] && echo "Warning: neither 'timeout' nor 'gtimeout' found. Install: brew install coreutils"
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.3-codex}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.1-pro-preview}"
+OPUS_MODEL="${OPUS_MODEL:-claude-opus-4-6}"
 ```
 
 ### 1c. Generate session ID & temp dir
@@ -225,7 +228,7 @@ For each contradiction, send a targeted question to each reviewer in the disagre
 } > /tmp/claude/ai-review-${REVIEW_ID}/codex-prompt.txt
 
 TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" \
-  "/tmp/claude/ai-review-${REVIEW_ID}" "${CODEX_SESSION_ID}"
+  "/tmp/claude/ai-review-${REVIEW_ID}" "${CODEX_SESSION_ID}" "${CODEX_MODEL}"
 DEBATE_EXIT=$?
 if [ "$DEBATE_EXIT" -eq 0 ]; then
   cat /tmp/claude/ai-review-${REVIEW_ID}/codex-output.md
@@ -245,7 +248,7 @@ fi
 } > /tmp/claude/ai-review-${REVIEW_ID}/gemini-prompt.txt
 
 TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-gemini.sh" \
-  "/tmp/claude/ai-review-${REVIEW_ID}" "${GEMINI_SESSION_UUID}"
+  "/tmp/claude/ai-review-${REVIEW_ID}" "${GEMINI_SESSION_UUID}" "${GEMINI_MODEL}"
 DEBATE_EXIT=$?
 if [ "$DEBATE_EXIT" -eq 0 ]; then
   cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-output.md
@@ -265,7 +268,7 @@ fi
 } > /tmp/claude/ai-review-${REVIEW_ID}/opus-prompt.txt
 
 TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-opus.sh" \
-  "/tmp/claude/ai-review-${REVIEW_ID}" "$OPUS_SESSION_ID"
+  "/tmp/claude/ai-review-${REVIEW_ID}" "$OPUS_SESSION_ID" "${OPUS_MODEL}"
 DEBATE_EXIT=$?
 if [ "$DEBATE_EXIT" -eq 0 ]; then
   cat /tmp/claude/ai-review-${REVIEW_ID}/opus-output.md

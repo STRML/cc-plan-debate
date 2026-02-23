@@ -197,6 +197,8 @@ Add:
 
 Add after the Gemini block:
 
+> **Implementation note:** The snippet below uses `${OPUS_TIMEOUT_CMD[@]}` (a pre-built array of `["timeout", "300"]`). The actual implementation diverged to use a shared `TIMEOUT_BIN` env-var pattern instead — each `invoke-*.sh` script receives `TIMEOUT_BIN` and builds its own timeout array internally (Codex/Gemini: 120s, Opus: 300s). This avoids callers having to construct per-reviewer arrays and keeps the runner script simpler.
+
 ```bash
 if which claude > /dev/null 2>&1 && which jq > /dev/null 2>&1; then
   (

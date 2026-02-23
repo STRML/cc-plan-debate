@@ -87,7 +87,7 @@ if [ -n "$SESSION_UUID" ]; then
     -s \
     -e "" \
     < "$WORK_DIR/plan.md" \
-    > "$WORK_DIR/gemini-output.md" 2>&1
+    > "$WORK_DIR/gemini-output.md" 2>"$WORK_DIR/gemini-stderr.log"
   GEMINI_EXIT=$?
 
   if [ "$GEMINI_EXIT" -eq 124 ]; then
@@ -109,7 +109,7 @@ if [ -z "$SESSION_UUID" ]; then
     -s \
     -e "" \
     < "$WORK_DIR/plan.md" \
-    > "$WORK_DIR/gemini-output.md" 2>&1
+    > "$WORK_DIR/gemini-output.md" 2>"$WORK_DIR/gemini-stderr.log"
   GEMINI_EXIT=$?
 fi
 

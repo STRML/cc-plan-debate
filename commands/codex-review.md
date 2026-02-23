@@ -1,6 +1,6 @@
 ---
 description: Send the current plan to OpenAI Codex CLI for iterative review. Claude and Codex go back-and-forth until Codex approves or max 5 rounds reached.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(timeout:*), Bash(gtimeout:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-codex.sh:*), Bash(codex exec -m:*), Bash(codex exec resume:*)
+allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(timeout:*), Bash(gtimeout:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-codex.sh:*)
 ---
 
 # Codex Plan Review (Iterative)

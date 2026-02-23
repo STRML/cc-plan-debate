@@ -82,6 +82,25 @@ Report:
 
 Note: `--version` confirms binary presence only. Authentication is validated at first use.
 
+## Step 3c: Check Codex sandbox exclusion
+
+Codex panics when run inside the Claude Code sandbox (macOS `SystemConfiguration` NULL crash). It must be listed in `sandbox.excludedCommands` in `~/.claude/settings.json`.
+
+```bash
+jq -e '.sandbox.excludedCommands | index("codex:*")' "$HOME/.claude/settings.json" > /dev/null 2>&1
+```
+
+Report:
+- Exit 0 (index found) → `✅ codex: sandbox excluded`
+- Non-zero → `❌ codex: will panic in sandbox — add "codex:*" to sandbox.excludedCommands in ~/.claude/settings.json`
+
+If missing, show the exact snippet to add:
+```json
+"sandbox": {
+  "excludedCommands": ["codex:*"]
+}
+```
+
 ## Step 4: Check timeout binary
 
 ```bash
@@ -120,7 +139,6 @@ without any approval prompts, add the following to ~/.claude/settings.json:
       "Bash(codex exec -m:*)",
       "Bash(codex exec resume:*)",
       "Bash(gemini -p:*)",
-      "Bash(gemini --list-sessions:*)",
       "Bash(gemini --resume:*)",
       "Bash(claude -p:*)",
       "Bash(claude --resume:*)",
@@ -140,7 +158,7 @@ that session. Adding to settings.json makes approval permanent across all sessio
 ```
 ### Summary
 
-  Codex:   ✅ ready (v0.x.x, authenticated)
+  Codex:   ✅ ready (v0.x.x, authenticated, sandbox excluded)
   Gemini:  ✅ ready (authenticated)
   Claude:  ✅ ready (v1.x.x)
   jq:      ✅ ready (/opt/homebrew/bin/jq)

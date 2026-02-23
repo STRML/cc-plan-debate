@@ -61,10 +61,17 @@ CLAUDE_FLAGS=(
 
 # Prompt: use opus-prompt.txt if present (resume/debate/revision rounds),
 # otherwise use the hardcoded initial Skeptic persona prompt.
+# Plan content is always injected directly — never referenced by path, since
+# --tools "" gives Opus no file-reading capability.
 if [ -f "$WORK_DIR/opus-prompt.txt" ]; then
   PROMPT="$(cat "$WORK_DIR/opus-prompt.txt")"
 else
-  PROMPT="You are The Skeptic — a devil's advocate. Your job is to find what everyone else missed. Be specific, be harsh, be right. Review the implementation plan in $WORK_DIR/plan.md. Focus on:
+  PLAN_CONTENT="$(cat "$WORK_DIR/plan.md")"
+  PROMPT="You are The Skeptic — a devil's advocate. Your job is to find what everyone else missed. Be specific, be harsh, be right. Review this implementation plan:
+
+$PLAN_CONTENT
+
+Focus on:
 1. Unstated assumptions — what is assumed true that could be false?
 2. Unhappy path — what breaks when the first thing goes wrong?
 3. Second-order failures — what does a partial success leave behind?

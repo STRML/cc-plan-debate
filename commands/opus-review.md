@@ -136,8 +136,11 @@ Write the resume prompt, then call the script — it handles resume vs fresh-fal
 
 ```bash
 {
-  echo "I've revised the plan based on your feedback. The updated plan is in /tmp/claude/ai-review-${REVIEW_ID}/plan.md."
+  echo "I've revised the plan based on your feedback. Here is the updated plan:"
   echo ""
+  cat /tmp/claude/ai-review-${REVIEW_ID}/plan.md
+  echo ""
+  echo "---"
   echo "Here's what I changed:"
   cat /tmp/claude/ai-review-${REVIEW_ID}/revisions.txt
   echo ""

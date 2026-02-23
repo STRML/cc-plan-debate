@@ -53,10 +53,17 @@ else
 fi
 
 # Prompt selection
+# Plan content is always injected directly — never referenced by path, for
+# consistency and to avoid any file-access issues across sandbox configurations.
 if [ -f "$WORK_DIR/codex-prompt.txt" ]; then
   PROMPT="$(cat "$WORK_DIR/codex-prompt.txt")"
 else
-  PROMPT="You are The Executor — a pragmatic runtime tracer. Review the implementation plan in $WORK_DIR/plan.md. Your job is to trace exactly what will happen at runtime. Assume nothing works until proven. Focus on:
+  PLAN_CONTENT="$(cat "$WORK_DIR/plan.md")"
+  PROMPT="You are The Executor — a pragmatic runtime tracer. Review this implementation plan:
+
+$PLAN_CONTENT
+
+Your job is to trace exactly what will happen at runtime. Assume nothing works until proven. Focus on:
 1. Shell correctness — syntax errors, wrong flags, unquoted variables
 2. Exit code handling — pipelines, \${PIPESTATUS}, timeout detection
 3. Race conditions — PID capture, parallel job coordination, session ID timing

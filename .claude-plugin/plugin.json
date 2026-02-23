@@ -1,6 +1,6 @@
 {
   "name": "debate",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Multi-model AI plan review: run Codex and Gemini in parallel, synthesize feedback, debate contradictions",
   "author": {
     "name": "strml",

@@ -72,11 +72,13 @@ Resolve once and build as an array — macOS ships `gtimeout` (coreutils), Linux
 TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
 if [ -n "$TIMEOUT_BIN" ]; then
   TIMEOUT_CMD=("$TIMEOUT_BIN" 120)
+  OPUS_TIMEOUT_CMD=("$TIMEOUT_BIN" 300)
 else
   echo "Warning: neither 'timeout' nor 'gtimeout' found."
   echo "Install with: brew install coreutils"
   echo "Proceeding without timeout protection."
   TIMEOUT_CMD=()
+  OPUS_TIMEOUT_CMD=()
 fi
 ```
 
@@ -253,7 +255,7 @@ For each contradiction, send a targeted question to each reviewer in the disagre
 } > /tmp/claude/ai-review-${REVIEW_ID}/codex-debate-prompt.txt
 
 DEBATE_PROMPT=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-debate-prompt.txt)
-"${TIMEOUT_CMD[@]}" codex exec resume ${CODEX_SESSION_ID} "$DEBATE_PROMPT" 2>&1 | tail -80
+"${TIMEOUT_CMD[@]}" codex exec resume "${CODEX_SESSION_ID}" "$DEBATE_PROMPT" 2>&1 | tail -80
 ```
 
 ```bash
@@ -265,7 +267,7 @@ DEBATE_PROMPT=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-debate-prompt.txt)
 } > /tmp/claude/ai-review-${REVIEW_ID}/gemini-debate-prompt.txt
 
 DEBATE_PROMPT=$(cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-debate-prompt.txt)
-"${TIMEOUT_CMD[@]}" gemini --resume $GEMINI_SESSION_UUID -p "$DEBATE_PROMPT" -s -e "" 2>&1
+"${TIMEOUT_CMD[@]}" gemini --resume "${GEMINI_SESSION_UUID}" -p "$DEBATE_PROMPT" -s -e "" 2>&1
 ```
 
 ```bash
@@ -276,11 +278,11 @@ DEBATE_PROMPT=$(cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-debate-prompt.txt)
   echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
 } > /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-prompt.txt
 
-DEBATE_PROMPT=$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-prompt.txt)
 if [ -n "$OPUS_SESSION_ID" ]; then
   unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-  "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" \
+  "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" \
     -p "$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-prompt.txt)" \
+    --effort medium \
     --tools "" --disable-slash-commands --strict-mcp-config \
     --settings '{"disableAllHooks":true}' --output-format json \
     > /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json
@@ -296,9 +298,10 @@ if [ -n "$OPUS_SESSION_ID" ]; then
 else
   # Fall back to fresh call; recapture OPUS_SESSION_ID from .session_id
   unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-  "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
+  "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
     "$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-prompt.txt)" \
     --model claude-opus-4-6 \
+    --effort medium \
     --tools "" --disable-slash-commands --strict-mcp-config \
     --settings '{"disableAllHooks":true}' --output-format json \
     > /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json

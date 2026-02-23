@@ -1,6 +1,6 @@
 ---
 description: Send the current plan to Claude Opus for iterative review. Claude and Opus go back-and-forth until Opus approves or max 5 rounds reached.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/ai-review-:*), Bash(rm -rf /tmp/ai-review-:*), Bash(claude -p:*), Bash(claude --resume:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(timeout:*), Bash(gtimeout:*)
+allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(claude -p:*), Bash(claude --resume:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(timeout:*), Bash(gtimeout:*)
 ---
 
 # Opus Plan Review (Iterative)
@@ -52,7 +52,7 @@ After installing, re-run /debate:opus-review.
 ```bash
 TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
 if [ -n "$TIMEOUT_BIN" ]; then
-  TIMEOUT_CMD=("$TIMEOUT_BIN" 120)
+  TIMEOUT_CMD=("$TIMEOUT_BIN" 300)
 else
   echo "Warning: neither 'timeout' nor 'gtimeout' found. Install: brew install coreutils"
   echo "Proceeding without timeout protection."
@@ -66,22 +66,22 @@ Invoke as `"${TIMEOUT_CMD[@]}" claude -p ...` — when `TIMEOUT_CMD` is empty th
 
 ```bash
 REVIEW_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | head -c 8)
-mkdir -p /tmp/ai-review-${REVIEW_ID}
+mkdir -p /tmp/claude/ai-review-${REVIEW_ID}
 ```
 
 Temp file paths:
-- Plan file: `/tmp/ai-review-${REVIEW_ID}/plan.md`
-- Opus JSON output: `/tmp/ai-review-${REVIEW_ID}/opus-raw.json`
-- Opus review text: `/tmp/ai-review-${REVIEW_ID}/opus-output.md`
-- Opus exit code: `/tmp/ai-review-${REVIEW_ID}/opus-exit.txt`
+- Plan file: `/tmp/claude/ai-review-${REVIEW_ID}/plan.md`
+- Opus JSON output: `/tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json`
+- Opus review text: `/tmp/claude/ai-review-${REVIEW_ID}/opus-output.md`
+- Opus exit code: `/tmp/claude/ai-review-${REVIEW_ID}/opus-exit.txt`
 
-**Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/ai-review-${REVIEW_ID}` before stopping.
+**Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/claude/ai-review-${REVIEW_ID}` before stopping.
 
 ## Step 2: Capture the Plan
 
 Write the current plan to the temp file:
 
-1. Write the full plan content to `/tmp/ai-review-${REVIEW_ID}/plan.md`
+1. Write the full plan content to `/tmp/claude/ai-review-${REVIEW_ID}/plan.md`
 2. If there is no plan in the current context, ask the user what they want reviewed
 
 ## Step 3: Initial Review (Round 1)
@@ -92,12 +92,13 @@ Unset nested-session guard, then run Claude in non-interactive mode with `--outp
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
   --model "$MODEL" \
+  --effort medium \
   --tools "" \
   --disable-slash-commands \
   --strict-mcp-config \
   --settings '{"disableAllHooks":true}' \
   --output-format json \
-  "You are The Skeptic — a devil's advocate. Your job is to find what everyone else missed. Be specific, be harsh, be right. Review the implementation plan in /tmp/ai-review-${REVIEW_ID}/plan.md. Focus on:
+  "You are The Skeptic — a devil's advocate. Your job is to find what everyone else missed. Be specific, be harsh, be right. Review the implementation plan in /tmp/claude/ai-review-${REVIEW_ID}/plan.md. Focus on:
 1. Unstated assumptions — what is assumed true that could be false?
 2. Unhappy path — what breaks when the first thing goes wrong?
 3. Second-order failures — what does a partial success leave behind?
@@ -107,18 +108,18 @@ unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 Be specific and actionable. If the plan is solid and ready to implement, end your review with exactly: VERDICT: APPROVED
 
 If changes are needed, end with exactly: VERDICT: REVISE" \
-  > /tmp/ai-review-${REVIEW_ID}/opus-raw.json
+  > /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json
 OPUS_EXIT=$?
 if [ "$OPUS_EXIT" -eq 124 ]; then
-  echo "Opus timed out after 120s."
-  rm -rf /tmp/ai-review-${REVIEW_ID}; exit 1
+  echo "Opus timed out after 300s."
+  rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
 elif [ "$OPUS_EXIT" -ne 0 ]; then
   echo "Opus failed (exit $OPUS_EXIT)."
-  rm -rf /tmp/ai-review-${REVIEW_ID}; exit 1
+  rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
 else
-  jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
-    > /tmp/ai-review-${REVIEW_ID}/opus-output.md
-  OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)
+  jq -r '.result // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json \
+    > /tmp/claude/ai-review-${REVIEW_ID}/opus-output.md
+  OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json)
 fi
 ```
 
@@ -133,7 +134,7 @@ fi
 
 ## Step 4: Read Review & Check Verdict
 
-1. Read `/tmp/ai-review-${REVIEW_ID}/opus-output.md`
+1. Read `/tmp/claude/ai-review-${REVIEW_ID}/opus-output.md`
 2. Present Opus's review:
 
 ```text
@@ -152,11 +153,11 @@ fi
 
 Based on Opus's feedback:
 
-1. **Revise the plan** — address each issue Opus raised. Update the plan content in the conversation context and rewrite `/tmp/ai-review-${REVIEW_ID}/plan.md` with the revised version.
+1. **Revise the plan** — address each issue Opus raised. Update the plan content in the conversation context and rewrite `/tmp/claude/ai-review-${REVIEW_ID}/plan.md` with the revised version.
 2. **Write the revision summary to a file** (never compose this inline in a shell string):
 
 ```bash
-cat > /tmp/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
+cat > /tmp/claude/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
 [Write the revision bullets here before closing the heredoc]
 EOF
 ```
@@ -176,14 +177,14 @@ If `OPUS_SESSION_ID` is set, resume the existing session. Build the resume promp
 
 ```bash
 {
-  echo "I've revised the plan based on your feedback. The updated plan is in /tmp/ai-review-${REVIEW_ID}/plan.md."
+  echo "I've revised the plan based on your feedback. The updated plan is in /tmp/claude/ai-review-${REVIEW_ID}/plan.md."
   echo ""
   echo "Here's what I changed:"
-  cat /tmp/ai-review-${REVIEW_ID}/revisions.txt
+  cat /tmp/claude/ai-review-${REVIEW_ID}/revisions.txt
   echo ""
   echo "Please re-review. If the plan is now solid and ready to implement, end with: VERDICT: APPROVED"
   echo "If more changes are needed, end with: VERDICT: REVISE"
-} > /tmp/ai-review-${REVIEW_ID}/resume-prompt.txt
+} > /tmp/claude/ai-review-${REVIEW_ID}/resume-prompt.txt
 
 ```
 
@@ -191,42 +192,44 @@ If `OPUS_SESSION_ID` is set, resume the existing session. Build the resume promp
 ```bash
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" \
-  -p "$(cat /tmp/ai-review-${REVIEW_ID}/resume-prompt.txt)" \
+  -p "$(cat /tmp/claude/ai-review-${REVIEW_ID}/resume-prompt.txt)" \
+  --effort medium \
   --tools "" \
   --disable-slash-commands \
   --strict-mcp-config \
   --settings '{"disableAllHooks":true}' \
   --output-format json \
-  > /tmp/ai-review-${REVIEW_ID}/opus-raw.json
+  > /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json
 OPUS_EXIT=$?
 if [ "$OPUS_EXIT" -eq 0 ]; then
-  jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
-    > /tmp/ai-review-${REVIEW_ID}/opus-output.md
-  NEW_SID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)
+  jq -r '.result // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json \
+    > /tmp/claude/ai-review-${REVIEW_ID}/opus-output.md
+  NEW_SID=$(jq -r '.session_id // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json)
   [ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
 else
   # Resume failed — fall back to fresh call
   unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
   "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
-    "$(cat /tmp/ai-review-${REVIEW_ID}/resume-prompt.txt)" \
+    "$(cat /tmp/claude/ai-review-${REVIEW_ID}/resume-prompt.txt)" \
     --model "$MODEL" \
+    --effort medium \
     --tools "" \
     --disable-slash-commands \
     --strict-mcp-config \
     --settings '{"disableAllHooks":true}' \
     --output-format json \
-    > /tmp/ai-review-${REVIEW_ID}/opus-raw.json
+    > /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json
   FRESH_EXIT=$?
   if [ "$FRESH_EXIT" -eq 124 ]; then
     echo "Warning: Opus fresh call timed out — stopping."
-    rm -rf /tmp/ai-review-${REVIEW_ID}; exit 1
+    rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
   elif [ "$FRESH_EXIT" -ne 0 ]; then
     echo "Warning: Opus fresh call failed (exit $FRESH_EXIT) — stopping."
-    rm -rf /tmp/ai-review-${REVIEW_ID}; exit 1
+    rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
   else
-    jq -r '.result // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json \
-      > /tmp/ai-review-${REVIEW_ID}/opus-output.md
-    OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/ai-review-${REVIEW_ID}/opus-raw.json)
+    jq -r '.result // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json \
+      > /tmp/claude/ai-review-${REVIEW_ID}/opus-output.md
+    OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json)
   fi
 fi
 ```
@@ -267,7 +270,7 @@ If max rounds were reached without approval:
 ## Step 8: Cleanup
 
 ```bash
-rm -rf /tmp/ai-review-${REVIEW_ID}
+rm -rf /tmp/claude/ai-review-${REVIEW_ID}
 ```
 
 If any step failed before reaching this step, still run this cleanup.

@@ -14,6 +14,8 @@ fi
 
 WORK_DIR="/tmp/claude/ai-review-${REVIEW_ID}"
 
+mkdir -p "$WORK_DIR" || { echo "Failed to create $WORK_DIR" >&2; exit 1; }
+
 # Codex/Gemini: 120s. Opus gets 300s — claude CLI startup adds overhead.
 if [ -n "$TIMEOUT_BIN" ]; then
   TIMEOUT_CMD=("$TIMEOUT_BIN" 120)
@@ -71,6 +73,7 @@ if which claude > /dev/null 2>&1 && which jq > /dev/null 2>&1; then
     unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
     "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
       --model claude-opus-4-6 \
+      --effort medium \
       --tools "" \
       --disable-slash-commands \
       --strict-mcp-config \
@@ -85,9 +88,12 @@ if which claude > /dev/null 2>&1 && which jq > /dev/null 2>&1; then
 
 Be specific and actionable. End with VERDICT: APPROVED or VERDICT: REVISE" \
       > "${WORK_DIR}/opus-raw.json"
-    echo "$?" > "${WORK_DIR}/opus-exit.txt"
-    jq -r '.result // ""' "${WORK_DIR}/opus-raw.json" \
-      > "${WORK_DIR}/opus-output.md"
+    OPUS_EXIT=$?
+    echo "$OPUS_EXIT" > "${WORK_DIR}/opus-exit.txt"
+    if [ "$OPUS_EXIT" -eq 0 ]; then
+      jq -r '.result // ""' "${WORK_DIR}/opus-raw.json" \
+        > "${WORK_DIR}/opus-output.md"
+    fi
   ) &
   PIDS+=($!)
 fi

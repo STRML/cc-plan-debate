@@ -42,6 +42,7 @@ session ID (`.session_id`). No stderr output in this mode.
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
   --model {model} \
+  --effort medium \
   --tools "" \
   --disable-slash-commands \
   --strict-mcp-config \
@@ -93,6 +94,7 @@ fi
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 "${TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" \
   -p "$(cat {prompt_file})" \
+  --effort medium \
   --tools "" \
   --disable-slash-commands \
   --strict-mcp-config \

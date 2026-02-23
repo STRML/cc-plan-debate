@@ -70,30 +70,8 @@ fi
 
 if which claude > /dev/null 2>&1 && which jq > /dev/null 2>&1; then
   (
-    unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-    "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
-      --model claude-opus-4-6 \
-      --effort medium \
-      --tools "" \
-      --disable-slash-commands \
-      --strict-mcp-config \
-      --settings '{"disableAllHooks":true}' \
-      --output-format json \
-      "You are The Skeptic — a devil's advocate. Your job is to find what everyone else missed. Be specific, be harsh, be right. Review the implementation plan in ${WORK_DIR}/plan.md. Focus on:
-1. Unstated assumptions — what is assumed true that could be false?
-2. Unhappy path — what breaks when the first thing goes wrong?
-3. Second-order failures — what does a partial success leave behind?
-4. Security — is any user-controlled content reaching a shell string?
-5. The one thing — if this plan has one fatal flaw, what is it?
-
-Be specific and actionable. End with VERDICT: APPROVED or VERDICT: REVISE" \
-      > "${WORK_DIR}/opus-raw.json"
-    OPUS_EXIT=$?
-    echo "$OPUS_EXIT" > "${WORK_DIR}/opus-exit.txt"
-    if [ "$OPUS_EXIT" -eq 0 ]; then
-      jq -r '.result // ""' "${WORK_DIR}/opus-raw.json" \
-        > "${WORK_DIR}/opus-output.md"
-    fi
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-opus.sh" "$WORK_DIR"
   ) &
   PIDS+=($!)
 fi

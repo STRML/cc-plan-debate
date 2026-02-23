@@ -1,6 +1,6 @@
 ---
 description: Run ALL available AI reviewers in parallel on the current plan, synthesize their feedback, debate contradictions, and produce a consensus verdict. Supports Codex, Gemini, and Claude Opus with graceful fallback if any are unavailable.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(codex exec -m:*), Bash(codex exec resume:*), Bash(gemini -p:*), Bash(gemini --list-sessions:*), Bash(gemini --resume:*), Bash(claude -p:*), Bash(claude --resume:*), Bash(timeout:*), Bash(gtimeout:*), Bash(diff:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/run-parallel.sh:*), Write(/tmp/claude/ai-review-*)
+allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(codex exec -m:*), Bash(codex exec resume:*), Bash(gemini -p:*), Bash(gemini --list-sessions:*), Bash(gemini --resume:*), Bash(claude -p:*), Bash(claude --resume:*), Bash(timeout:*), Bash(gtimeout:*), Bash(diff:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/run-parallel.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-opus.sh:*), Write(/tmp/claude/ai-review-*)
 ---
 
 # AI Multi-Model Plan Review
@@ -69,16 +69,15 @@ If this fails, warn: `Gemini is not authenticated — run: gemini auth`
 Resolve once and build as an array — macOS ships `gtimeout` (coreutils), Linux ships `timeout`:
 
 ```bash
+SCRIPT_DIR=~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts
 TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
 if [ -n "$TIMEOUT_BIN" ]; then
   TIMEOUT_CMD=("$TIMEOUT_BIN" 120)
-  OPUS_TIMEOUT_CMD=("$TIMEOUT_BIN" 300)
 else
   echo "Warning: neither 'timeout' nor 'gtimeout' found."
   echo "Install with: brew install coreutils"
   echo "Proceeding without timeout protection."
   TIMEOUT_CMD=()
-  OPUS_TIMEOUT_CMD=()
 fi
 ```
 
@@ -276,37 +275,17 @@ DEBATE_PROMPT=$(cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-debate-prompt.txt)
   echo "[Reviewer] raised a concern about [topic]: [their position]."
   echo "You said: [Opus's position]."
   echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
-} > /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-prompt.txt
+} > /tmp/claude/ai-review-${REVIEW_ID}/opus-prompt.txt
 
-if [ -n "$OPUS_SESSION_ID" ]; then
-  unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-  "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$OPUS_SESSION_ID" \
-    -p "$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-prompt.txt)" \
-    --effort medium \
-    --tools "" --disable-slash-commands --strict-mcp-config \
-    --settings '{"disableAllHooks":true}' --output-format json \
-    > /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json
-  RESUME_EXIT=$?
-  if [ "$RESUME_EXIT" -eq 0 ]; then
-    jq -r '.result // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json
-    NEW_SID=$(jq -r '.session_id // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json)
-    [ -n "$NEW_SID" ] && OPUS_SESSION_ID="$NEW_SID"
-  else
-    echo "⚠️ Opus debate resume failed (exit $RESUME_EXIT) — skipping Opus debate response."
-    OPUS_SESSION_ID=""
-  fi
+TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-opus.sh" \
+  "/tmp/claude/ai-review-${REVIEW_ID}" "$OPUS_SESSION_ID"
+DEBATE_EXIT=$?
+if [ "$DEBATE_EXIT" -eq 0 ]; then
+  cat /tmp/claude/ai-review-${REVIEW_ID}/opus-output.md
+  OPUS_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-session-id.txt 2>/dev/null || echo "")
 else
-  # Fall back to fresh call; recapture OPUS_SESSION_ID from .session_id
-  unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-  "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
-    "$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-prompt.txt)" \
-    --model claude-opus-4-6 \
-    --effort medium \
-    --tools "" --disable-slash-commands --strict-mcp-config \
-    --settings '{"disableAllHooks":true}' --output-format json \
-    > /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json
-  jq -r '.result // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json
-  OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-debate-raw.json)
+  echo "⚠️ Opus debate call failed (exit $DEBATE_EXIT) — skipping Opus debate response."
+  OPUS_SESSION_ID=""
 fi
 ```
 

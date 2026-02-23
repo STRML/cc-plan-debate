@@ -1,6 +1,6 @@
 ---
 description: Run ALL available AI reviewers in parallel on the current plan, synthesize their feedback, debate contradictions, and produce a consensus verdict. Supports Codex, Gemini, and Claude Opus with graceful fallback if any are unavailable.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(cat:*), Bash(timeout:*), Bash(gtimeout:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/run-parallel.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-codex.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/invoke-opus.sh:*), Write(/tmp/claude/ai-review-*)
+allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(cat:*), Bash(timeout:*), Bash(gtimeout:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/run-parallel.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-codex.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-opus.sh:*), Write(/tmp/claude/ai-review-*)
 ---
 
 # AI Multi-Model Plan Review
@@ -69,7 +69,8 @@ If this fails, warn: `Gemini is not authenticated — run: gemini auth`
 Resolve the timeout binary — macOS ships `gtimeout` (coreutils), Linux ships `timeout`. Pass as `TIMEOUT_BIN` env var to all invoke scripts; each script builds its own timeout command internally:
 
 ```bash
-SCRIPT_DIR=~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts
+PLUGIN_VERSION=$(jq -r '.plugins["debate@debate-dev"][0].version' ~/.claude/plugins/installed_plugins.json)
+SCRIPT_DIR=~/.claude/plugins/cache/debate-dev/debate/$PLUGIN_VERSION/scripts
 TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
 [ -z "$TIMEOUT_BIN" ] && echo "Warning: neither 'timeout' nor 'gtimeout' found. Install: brew install coreutils"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.3-codex}"
@@ -121,7 +122,7 @@ Run `/debate:setup` to see the full permission allowlist and configure for unatt
 **Execute the parallel runner script** from the plugin:
 
 ```bash
-bash ~/.claude/plugins/cache/debate-dev/debate/1.0.0/scripts/run-parallel.sh "$REVIEW_ID" "$TIMEOUT_BIN"
+bash "$SCRIPT_DIR/run-parallel.sh" "$REVIEW_ID" "$TIMEOUT_BIN"
 ```
 
 The script is pre-built in the plugin — Codex and Gemini run with a 120s timeout, Opus runs with 300s (the `claude` CLI has more startup overhead). Session capture is handled inside each invoke-*.sh script.

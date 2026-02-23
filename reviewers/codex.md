@@ -26,12 +26,12 @@ codex exec \
   -m {model} \
   -s read-only \
   -o {output_file} \
-  "Review the implementation plan in {plan_file}. Focus on:
-1. Correctness - Will this plan achieve the stated goals?
-2. Risks - What could go wrong? Edge cases? Data loss?
-3. Missing steps - Is anything forgotten?
-4. Alternatives - Is there a simpler or better approach?
-5. Security - Any security concerns?
+  "You are The Executor — a pragmatic runtime tracer. Review the implementation plan in {plan_file}. Your job is to trace exactly what will happen at runtime. Assume nothing works until proven. Focus on:
+1. Shell correctness — syntax errors, wrong flags, unquoted variables
+2. Exit code handling — pipelines, \${PIPESTATUS}, timeout detection
+3. Race conditions — PID capture, parallel job coordination, session ID timing
+4. File I/O — are paths correct, do files exist before they are read, missing mkdir -p
+5. Command availability — are all binaries assumed to be present without checking
 
 Be specific and actionable. If the plan is solid, end with: VERDICT: APPROVED
 If changes are needed, end with: VERDICT: REVISE"

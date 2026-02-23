@@ -21,8 +21,9 @@
 #   gemini-exit.txt            exit code
 #   gemini-session-id.txt      session UUID for next resume (empty on failure)
 #
-# Session capture: diffs gemini --list-sessions before and after the call.
-# Uses a 5s timeout on --list-sessions to guard against hangs (sandbox/auth issues).
+# Session capture: finds new session-*.json files in ~/.gemini/tmp/ created during
+# the call (via -newer marker file), reads .sessionId from JSON. Avoids
+# gemini --list-sessions which hangs in the Claude Code sandbox.
 
 WORK_DIR="${1:-}"
 SESSION_UUID="${2:-}"
@@ -49,10 +50,8 @@ if [ -z "${TIMEOUT_BIN:-}" ]; then
 fi
 if [ -n "$TIMEOUT_BIN" ]; then
   TIMEOUT_CMD=("$TIMEOUT_BIN" 120)
-  SESSIONS_TIMEOUT=("$TIMEOUT_BIN" 5)
 else
   TIMEOUT_CMD=()
-  SESSIONS_TIMEOUT=()
 fi
 
 # Prompt selection
@@ -71,10 +70,8 @@ Be specific and actionable. If the plan is solid and ready to implement, end you
 If changes are needed, end with exactly: VERDICT: REVISE"
 fi
 
-# Snapshot sessions before call (5s timeout guards against --list-sessions hangs)
-"${SESSIONS_TIMEOUT[@]}" gemini --list-sessions 2>/dev/null \
-  > "$WORK_DIR/gemini-sessions-before.txt" \
-  || touch "$WORK_DIR/gemini-sessions-before.txt"
+# Mark timestamp before call so we can find the new session file via -newer
+touch "$WORK_DIR/gemini-call-start"
 
 GEMINI_EXIT=0
 
@@ -115,15 +112,10 @@ fi
 
 echo "$GEMINI_EXIT" > "$WORK_DIR/gemini-exit.txt"
 
-# Capture session UUID by diffing session list after the call
-"${SESSIONS_TIMEOUT[@]}" gemini --list-sessions 2>/dev/null \
-  > "$WORK_DIR/gemini-sessions-after.txt" \
-  || touch "$WORK_DIR/gemini-sessions-after.txt"
-
-NEW_UUID=$(diff "$WORK_DIR/gemini-sessions-before.txt" \
-               "$WORK_DIR/gemini-sessions-after.txt" 2>/dev/null \
-  | grep '^>' \
-  | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
+# Capture session UUID by reading the new session file from ~/.gemini/tmp
+# (avoids gemini --list-sessions which hangs in sandbox)
+NEW_UUID=$(find ~/.gemini/tmp -name "session-*.json" -newer "$WORK_DIR/gemini-call-start" 2>/dev/null \
+  | xargs -I{} jq -r '.sessionId // empty' {} 2>/dev/null \
   | head -1 || echo "")
 
 if [ -n "$NEW_UUID" ]; then

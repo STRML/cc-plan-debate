@@ -1,6 +1,6 @@
 ---
 description: Check debate plugin prerequisites, verify reviewers are installed and authenticated, and print the exact settings.json snippet for fully unattended (no-prompt) operation.
-allowed-tools: Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(command -v:*), Bash(gemini --list-sessions:*), Bash(codex --version:*), Bash(claude --version:*)
+allowed-tools: Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(command -v:*), Bash(codex --version:*), Bash(claude --version:*), Bash(timeout 30 gemini:*)
 ---
 
 # debate — Setup & Permission Check
@@ -47,21 +47,27 @@ For anything missing, show the install command:
 codex --version
 ```
 
-If codex is found, report the version. Note that Codex requires `OPENAI_API_KEY` to be set — check:
+If codex is found, report the version. Codex stores credentials in `~/.codex/auth.json` — check:
 
 ```bash
-[ -n "$OPENAI_API_KEY" ] && echo "OPENAI_API_KEY: set" || echo "OPENAI_API_KEY: NOT SET"
-```
-
-## Step 3: Check Gemini authentication
-
-```bash
-gemini --list-sessions > /dev/null 2>&1
+[ -f "$HOME/.codex/auth.json" ] && echo "auth.json: present" || echo "auth.json: NOT FOUND"
 ```
 
 Report:
-- Exit 0 → `✅ gemini: authenticated`
-- Non-zero → `❌ gemini: not authenticated — run: gemini auth`
+- Present → `✅ codex: authenticated (v0.x.x)`
+- Not found → `❌ codex: not authenticated — run: codex auth` (or launch `codex` interactively to complete sign-in)
+
+## Step 3: Check Gemini authentication
+
+`--list-sessions` hangs in the Claude Code sandbox, so use a real invocation instead:
+
+```bash
+echo "reply with only the word PONG" | timeout 30 gemini -s -e "" 2>/dev/null
+```
+
+Report:
+- Output contains "PONG" (case-insensitive) → `✅ gemini: authenticated`
+- Non-zero exit or no output → `❌ gemini: not authenticated — run: gemini auth`
 
 ## Step 3b: Check Claude CLI
 
@@ -134,7 +140,7 @@ that session. Adding to settings.json makes approval permanent across all sessio
 ```
 ### Summary
 
-  Codex:   ✅ ready (v0.x.x, API key set)
+  Codex:   ✅ ready (v0.x.x, authenticated)
   Gemini:  ✅ ready (authenticated)
   Claude:  ✅ ready (v1.x.x)
   jq:      ✅ ready (/opt/homebrew/bin/jq)

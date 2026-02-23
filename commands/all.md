@@ -147,7 +147,7 @@ Then clean up and exit.
 ```bash
 CODEX_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-session-id.txt 2>/dev/null || echo "")
 GEMINI_SESSION_UUID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-session-id.txt 2>/dev/null || echo "")
-OPUS_SESSION_ID=$(jq -r '.session_id // ""' /tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json 2>/dev/null || echo "")
+OPUS_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-session-id.txt 2>/dev/null || echo "")
 ```
 
 ---
@@ -369,7 +369,7 @@ If any step failed before reaching this step, still run this cleanup.
 - **Graceful degradation:** If only 1 reviewer is available, run the full flow and skip the debate phase
 - **All-fail handling:** If all reviewers fail/timeout, return `UNDECIDED` with retry guidance
 - **Session tracking:** Always recapture session IDs from `*-session-id.txt` after each invoke script call — stale IDs cause silent failures on next resume; each script handles fallback internally
-- **Opus session ID:** Parse `OPUS_SESSION_ID` via `jq -r '.session_id'` from `opus-raw.json`; script guards `--resume` with `[ -n "$OPUS_SESSION_ID" ]` internally
+- **Opus session ID:** Read `OPUS_SESSION_ID` from `opus-session-id.txt` (written by invoke-opus.sh); script guards `--resume` with `[ -n "$OPUS_SESSION_ID" ]` internally
 - **Opus nested sessions:** `invoke-opus.sh` handles `unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT` and `CLAUDE_CODE_SIMPLE=1` internally
 - **Opus jq dependency:** Skip Claude reviewer if `jq` is not installed; show install guidance
 - **Debate guard:** Explicitly skip Step 5 if fewer than 2 reviewers succeeded

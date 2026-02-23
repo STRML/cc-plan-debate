@@ -34,6 +34,11 @@ if [ ! -d "$WORK_DIR" ]; then
   exit 1
 fi
 
+if [ ! -f "$WORK_DIR/plan.md" ]; then
+  echo "invoke-opus.sh: plan.md not found in $WORK_DIR" >&2
+  exit 1
+fi
+
 # Resolve timeout — inherit TIMEOUT_BIN from environment or detect
 if [ -z "${TIMEOUT_BIN:-}" ]; then
   TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
@@ -92,21 +97,29 @@ fi
 
 if [ -z "$SESSION_ID" ]; then
   # Fresh call (either initial or fallback from failed resume)
-  "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude -p \
+  "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude \
     --model "$MODEL" \
+    -p "$PROMPT" \
     "${CLAUDE_FLAGS[@]}" \
-    "$PROMPT" \
     > "$WORK_DIR/opus-raw.json"
   OPUS_EXIT=$?
 fi
 
-echo "$OPUS_EXIT" > "$WORK_DIR/opus-exit.txt"
-
 if [ "$OPUS_EXIT" -eq 0 ]; then
-  jq -r '.result // ""' "$WORK_DIR/opus-raw.json" > "$WORK_DIR/opus-output.md"
-  jq -r '.session_id // ""' "$WORK_DIR/opus-raw.json" > "$WORK_DIR/opus-session-id.txt"
+  jq -r '.result // ""' "$WORK_DIR/opus-raw.json" > "$WORK_DIR/opus-output.md" 2>/dev/null
+  JQ_EXIT=$?
+  if [ "$JQ_EXIT" -ne 0 ] || ! jq -e '.result' "$WORK_DIR/opus-raw.json" > /dev/null 2>&1; then
+    echo "invoke-opus.sh: failed to parse JSON from claude output" >&2
+    OPUS_EXIT=1
+    : > "$WORK_DIR/opus-output.md"
+    : > "$WORK_DIR/opus-session-id.txt"
+  else
+    jq -r '.session_id // ""' "$WORK_DIR/opus-raw.json" > "$WORK_DIR/opus-session-id.txt"
+  fi
 else
   : > "$WORK_DIR/opus-session-id.txt"
 fi
+
+echo "$OPUS_EXIT" > "$WORK_DIR/opus-exit.txt"
 
 exit "$OPUS_EXIT"

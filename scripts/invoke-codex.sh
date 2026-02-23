@@ -37,6 +37,11 @@ if [ ! -d "$WORK_DIR" ]; then
   exit 1
 fi
 
+if [ ! -f "$WORK_DIR/plan.md" ]; then
+  echo "invoke-codex.sh: plan.md not found in $WORK_DIR" >&2
+  exit 1
+fi
+
 # Resolve timeout
 if [ -z "${TIMEOUT_BIN:-}" ]; then
   TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"

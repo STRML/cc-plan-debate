@@ -8,8 +8,9 @@ install_command: npm install -g @openai/codex
 
 # Codex Reviewer Definition
 
-This file defines how to use the OpenAI Codex CLI as a plan reviewer.
-Claude reads these instructions and interpolates `{placeholder}` values at runtime.
+**The Executor** — pragmatic runtime tracer focused on what will actually happen at runtime.
+
+Focus areas: shell correctness, exit code handling, race conditions, file I/O, command availability.
 
 ## Availability Check
 
@@ -17,38 +18,29 @@ Claude reads these instructions and interpolates `{placeholder}` values at runti
 which codex
 ```
 
-## Initial Review
+## Invocation
 
-Plan content is always passed via file path reference — never inlined in the shell command string.
-
-```bash
-codex exec \
-  -m {model} \
-  -s read-only \
-  -o {output_file} \
-  "You are The Executor — a pragmatic runtime tracer. Review the implementation plan in {plan_file}. Your job is to trace exactly what will happen at runtime. Assume nothing works until proven. Focus on:
-1. Shell correctness — syntax errors, wrong flags, unquoted variables
-2. Exit code handling — pipelines, \${PIPESTATUS}, timeout detection
-3. Race conditions — PID capture, parallel job coordination, session ID timing
-4. File I/O — are paths correct, do files exist before they are read, missing mkdir -p
-5. Command availability — are all binaries assumed to be present without checking
-
-Be specific and actionable. If the plan is solid, end with: VERDICT: APPROVED
-If changes are needed, end with: VERDICT: REVISE"
-```
-
-**Session ID capture:** Read stdout for the line `session id: <uuid>`. Store as `CODEX_SESSION_ID_{reviewer_name}`.
-This ID is required for session resume — do NOT use `--last` which is race-prone with concurrent sessions.
-
-## Session Resume
+All Codex calls go through `scripts/invoke-codex.sh`. The script handles:
+- Model flags (`-m $MODEL -s read-only`)
+- Session resume with fallback to fresh call on failure
+- Session ID extraction from stdout (`session id: UUID`)
+- `PIPESTATUS[0]` exit code capture through tee pipeline
 
 ```bash
-codex exec resume {session_id} "{prompt}" 2>&1 | tail -80
+TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" \
+  "$WORK_DIR" [session_id] [model]
 ```
 
-**Note:** `codex exec resume` does NOT support `-o`. Capture output from stdout.
+## Prompt Files
 
-## Output
+- **Initial review:** no prompt file needed — script uses hardcoded Executor persona referencing `$WORK_DIR/plan.md`
+- **Resume/debate:** write prompt to `$WORK_DIR/codex-prompt.txt` before calling script
 
-- Initial review: written to `{output_file}` via `-o` flag
-- Resume output: read from stdout (pipe tail to skip startup lines)
+## Output Files
+
+| File | Contents |
+|------|----------|
+| `codex-output.md` | Review text |
+| `codex-session-id.txt` | Session ID for next resume (empty on failure) |
+| `codex-exit.txt` | Exit code |
+| `codex-stdout.txt` | Raw stdout (used internally for session ID extraction) |

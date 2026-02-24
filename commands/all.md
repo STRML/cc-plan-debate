@@ -359,7 +359,23 @@ You may:
 
 ---
 
-## Step 8: Cleanup
+## Step 8: Present Final Plan
+
+Before cleanup, always display the final plan so it persists in the conversation context. The user will need it after clearing context to implement.
+
+Read `/tmp/claude/ai-review-${REVIEW_ID}/plan.md` and output it under a clear header:
+
+```
+---
+## Final Plan
+
+[full content of plan.md]
+
+---
+Review complete. Clear context and implement this plan, or save it elsewhere first.
+```
+
+## Step 9: Cleanup
 
 ```bash
 rm -rf /tmp/claude/ai-review-${REVIEW_ID}

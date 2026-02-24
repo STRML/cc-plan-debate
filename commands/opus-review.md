@@ -78,7 +78,7 @@ Key files: `plan.md`, `opus-output.md`, `opus-session-id.txt`, `opus-exit.txt`
 Run the Opus reviewer script (handles all claude flags, session capture, and retry logic internally):
 
 ```bash
-TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-opus.sh" \
+bash "$SCRIPT_DIR/invoke-opus.sh" \
   "/tmp/claude/ai-review-${REVIEW_ID}" "" "$MODEL"
 OPUS_EXIT=$?
 if [ "$OPUS_EXIT" -eq 124 ]; then
@@ -148,7 +148,7 @@ Write the resume prompt, then call the script — it handles resume vs fresh-fal
   echo "If more changes are needed, end with: VERDICT: REVISE"
 } > /tmp/claude/ai-review-${REVIEW_ID}/opus-prompt.txt
 
-TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-opus.sh" \
+bash "$SCRIPT_DIR/invoke-opus.sh" \
   "/tmp/claude/ai-review-${REVIEW_ID}" "$OPUS_SESSION_ID" "$MODEL"
 OPUS_EXIT=$?
 if [ "$OPUS_EXIT" -eq 124 ]; then
@@ -188,6 +188,18 @@ If max rounds were reached without approval:
 
 ---
 **Opus still has concerns. Review the remaining items and decide whether to proceed or continue refining.**
+```
+
+Then display the final plan so it persists in the conversation context after cleanup:
+
+```
+---
+## Final Plan
+
+[full content of /tmp/claude/ai-review-${REVIEW_ID}/plan.md]
+
+---
+Review complete. Clear context and implement this plan, or save it elsewhere first.
 ```
 
 ## Step 8: Cleanup

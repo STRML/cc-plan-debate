@@ -184,6 +184,18 @@ If max rounds were reached without approval:
 **Codex still has concerns. Review the remaining items and decide whether to proceed or continue refining.**
 ```
 
+Then display the final plan so it persists in the conversation context after cleanup:
+
+```
+---
+## Final Plan
+
+[full content of /tmp/claude/ai-review-${REVIEW_ID}/plan.md]
+
+---
+Review complete. Clear context and implement this plan, or save it elsewhere first.
+```
+
 ## Step 8: Cleanup
 
 ```bash

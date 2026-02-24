@@ -43,8 +43,9 @@ fi
 if [ -z "${TIMEOUT_BIN:-}" ]; then
   TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
 fi
-if [ -n "$TIMEOUT_BIN" ]; then
-  OPUS_TIMEOUT_CMD=("$TIMEOUT_BIN" 300)
+OPUS_TIMEOUT="${OPUS_TIMEOUT:-300}"
+if [ -n "$TIMEOUT_BIN" ] && [ -n "$OPUS_TIMEOUT" ] && [ "$OPUS_TIMEOUT" != "0" ]; then
+  OPUS_TIMEOUT_CMD=("$TIMEOUT_BIN" "$OPUS_TIMEOUT")
 else
   OPUS_TIMEOUT_CMD=()
 fi
@@ -89,7 +90,7 @@ unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 OPUS_EXIT=0
 
 if [ -n "$SESSION_ID" ]; then
-  echo "[opus] Resuming session with ${MODEL} (timeout: 300s)..." >&2
+  echo "[opus] Resuming session with ${MODEL} (timeout: ${OPUS_TIMEOUT:-none}s)..." >&2
   # Attempt session resume
   "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$SESSION_ID" \
     -p "$PROMPT" \
@@ -109,7 +110,7 @@ if [ -n "$SESSION_ID" ]; then
 fi
 
 if [ -z "$SESSION_ID" ]; then
-  echo "[opus] Submitting plan to ${MODEL} (timeout: 300s)..." >&2
+  echo "[opus] Submitting plan to ${MODEL} (timeout: ${OPUS_TIMEOUT:-none}s)..." >&2
   # Fresh call (either initial or fallback from failed resume)
   "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude \
     --model "$MODEL" \
@@ -122,7 +123,7 @@ fi
 if [ "$OPUS_EXIT" -eq 0 ]; then
   echo "[opus] Review received." >&2
 elif [ "$OPUS_EXIT" -eq 124 ]; then
-  echo "[opus] Timed out after 300s." >&2
+  echo "[opus] Timed out after ${OPUS_TIMEOUT}s." >&2
 else
   echo "[opus] Failed (exit $OPUS_EXIT)." >&2
 fi

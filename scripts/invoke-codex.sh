@@ -46,8 +46,9 @@ fi
 if [ -z "${TIMEOUT_BIN:-}" ]; then
   TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
 fi
-if [ -n "$TIMEOUT_BIN" ]; then
-  TIMEOUT_CMD=("$TIMEOUT_BIN" 120)
+CODEX_TIMEOUT="${CODEX_TIMEOUT:-120}"
+if [ -n "$TIMEOUT_BIN" ] && [ -n "$CODEX_TIMEOUT" ] && [ "$CODEX_TIMEOUT" != "0" ]; then
+  TIMEOUT_CMD=("$TIMEOUT_BIN" "$CODEX_TIMEOUT")
 else
   TIMEOUT_CMD=()
 fi
@@ -76,7 +77,7 @@ fi
 CODEX_EXIT=0
 
 if [ -n "$SESSION_ID" ]; then
-  echo "[codex] Resuming session with ${MODEL} (timeout: 120s)..." >&2
+  echo "[codex] Resuming session with ${MODEL} (timeout: ${CODEX_TIMEOUT:-none}s)..." >&2
   # Resume: --json flag outputs JSONL; session ID extracted from thread.started event
   "${TIMEOUT_CMD[@]}" codex exec resume --json "$SESSION_ID" "$PROMPT" \
     2>&1 | tee "$WORK_DIR/codex-stdout.txt"
@@ -94,7 +95,7 @@ if [ -n "$SESSION_ID" ]; then
 fi
 
 if [ -z "$SESSION_ID" ]; then
-  echo "[codex] Submitting plan to ${MODEL} (timeout: 120s)..." >&2
+  echo "[codex] Submitting plan to ${MODEL} (timeout: ${CODEX_TIMEOUT:-none}s)..." >&2
   # Fresh call: --json outputs JSONL to stdout; no -o needed (extracted below)
   "${TIMEOUT_CMD[@]}" codex exec \
     -m "$MODEL" \
@@ -107,7 +108,7 @@ if [ -z "$SESSION_ID" ]; then
   if [ "$CODEX_EXIT" -eq 0 ]; then
     echo "[codex] Review received." >&2
   elif [ "$CODEX_EXIT" -eq 124 ]; then
-    echo "[codex] Timed out after 120s." >&2
+    echo "[codex] Timed out after ${CODEX_TIMEOUT}s." >&2
   else
     echo "[codex] Failed (exit $CODEX_EXIT)." >&2
   fi

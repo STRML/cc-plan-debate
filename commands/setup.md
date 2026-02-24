@@ -168,7 +168,7 @@ bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/create-links.sh
 
 Report:
 - Exit 0 → `✅ ~/.claude/debate-scripts created`
-- Non-zero → `❌ symlink creation failed — check permissions on ~/.claude/`
+- Exit 1 (sandbox error) → show the exact `ln -sfn` command from the script output and tell the user to run it from their regular terminal (outside Claude Code), since the Claude Code sandbox restricts writes to `~/.claude/`
 
 Note: Re-run `/debate:setup` after updating the plugin to refresh this symlink.
 

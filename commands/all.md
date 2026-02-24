@@ -1,6 +1,6 @@
 ---
 description: Run ALL available AI reviewers in parallel on the current plan, synthesize their feedback, debate contradictions, and produce a consensus verdict. Supports Codex, Gemini, and Claude Opus with graceful fallback if any are unavailable.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(cat:*), Bash(timeout:*), Bash(gtimeout:*), Bash(gemini -s:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/run-parallel.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-codex.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-opus.sh:*), Write(/tmp/claude/ai-review-*)
+allowed-tools: Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/run-parallel.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-codex.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-opus.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(gemini -s:*), Write(/tmp/claude/ai-review-*)
 ---
 
 # AI Multi-Model Plan Review
@@ -64,28 +64,23 @@ If output does not contain "PONG" (case-insensitive), warn: `Gemini is not authe
 
 **If fewer than 2 reviewers are available**, note which is missing and proceed with the single available reviewer. Skip Step 5 (debate) entirely when only 1 reviewer runs — debate requires at least 2 reviewers.
 
-### 1b. Resolve timeout command
+### 1b. Generate session ID & temp dir
 
-Resolve the timeout binary — macOS ships `gtimeout` (coreutils), Linux ships `timeout`. Pass as `TIMEOUT_BIN` env var to all invoke scripts; each script builds its own timeout command internally:
-
-```bash
-PLUGIN_VERSION=$(jq -r '.plugins["debate@debate-dev"][0].version' ~/.claude/plugins/installed_plugins.json)
-SCRIPT_DIR=~/.claude/plugins/cache/debate-dev/debate/$PLUGIN_VERSION/scripts
-TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
-[ -z "$TIMEOUT_BIN" ] && echo "Warning: neither 'timeout' nor 'gtimeout' found. Install: brew install coreutils"
-CODEX_MODEL="${CODEX_MODEL:-gpt-5.3-codex}"
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.1-pro-preview}"
-OPUS_MODEL="${OPUS_MODEL:-claude-opus-4-6}"
-```
-
-### 1c. Generate session ID & temp dir
+Run the setup helper and note `REVIEW_ID`, `WORK_DIR`, and `SCRIPT_DIR` from the output:
 
 ```bash
-REVIEW_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | head -c 8)
-mkdir -p /tmp/claude/ai-review-${REVIEW_ID}
-printf 'CODEX_MODEL=%s\nGEMINI_MODEL=%s\nOPUS_MODEL=%s\n' "$CODEX_MODEL" "$GEMINI_MODEL" "$OPUS_MODEL" \
-  > /tmp/claude/ai-review-${REVIEW_ID}/config.env
+bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh
 ```
+
+Then write `config.env` to `<WORK_DIR>/config.env` with the model values (use user-provided overrides or defaults):
+
+```
+CODEX_MODEL=<CODEX_MODEL|gpt-5.3-codex>
+GEMINI_MODEL=<GEMINI_MODEL|gemini-3.1-pro-preview>
+OPUS_MODEL=<OPUS_MODEL|claude-opus-4-6>
+```
+
+Use `SCRIPT_DIR` from the setup output for all subsequent `bash` calls — never re-glob.
 
 Temp file paths:
 - Plan: `/tmp/claude/ai-review-${REVIEW_ID}/plan.md`
@@ -102,13 +97,13 @@ Temp file paths:
 
 **Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/claude/ai-review-${REVIEW_ID}` before stopping.
 
-### 1d. Capture the plan
+### 1c. Capture the plan
 
 Write the current plan to `/tmp/claude/ai-review-${REVIEW_ID}/plan.md`.
 
 If there is no plan in the current context, ask the user to paste it or describe what they want reviewed.
 
-### 1e. Announce
+### 1d. Announce
 
 ```text
 Running parallel review with: codex, gemini, claude
@@ -124,7 +119,7 @@ Run `/debate:setup` to see the full permission allowlist and configure for unatt
 **Execute the parallel runner script** from the plugin:
 
 ```bash
-bash "$SCRIPT_DIR/run-parallel.sh" "$REVIEW_ID" "$TIMEOUT_BIN"
+bash "<SCRIPT_DIR>/run-parallel.sh" "<REVIEW_ID>"
 ```
 
 The script is pre-built in the plugin — Codex runs with 120s, Gemini with 240s, Opus with 300s (the `claude` CLI has more startup overhead). Session capture is handled inside each invoke-*.sh script.
@@ -152,12 +147,10 @@ Options:
 ```
 Then clean up and exit.
 
-**Capture session IDs** from the files written by each invoke script:
-```bash
-CODEX_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-session-id.txt 2>/dev/null || echo "")
-GEMINI_SESSION_UUID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-session-id.txt 2>/dev/null || echo "")
-OPUS_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-session-id.txt 2>/dev/null || echo "")
-```
+**Capture session IDs** by reading these files (use the Read tool or note content directly):
+- `<WORK_DIR>/codex-session-id.txt` → `CODEX_SESSION_ID`
+- `<WORK_DIR>/gemini-session-id.txt` → `GEMINI_SESSION_UUID`
+- `<WORK_DIR>/opus-session-id.txt` → `OPUS_SESSION_ID`
 
 ---
 
@@ -233,16 +226,7 @@ For each contradiction, send a targeted question to each reviewer in the disagre
   echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
 } > /tmp/claude/ai-review-${REVIEW_ID}/codex-prompt.txt
 
-bash "$SCRIPT_DIR/invoke-codex.sh" \
-  "/tmp/claude/ai-review-${REVIEW_ID}" "${CODEX_SESSION_ID}" "${CODEX_MODEL}"
-DEBATE_EXIT=$?
-if [ "$DEBATE_EXIT" -eq 0 ]; then
-  cat /tmp/claude/ai-review-${REVIEW_ID}/codex-output.md
-  CODEX_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-session-id.txt 2>/dev/null || echo "")
-else
-  echo "⚠️ Codex debate call failed (exit $DEBATE_EXIT) — skipping Codex debate response."
-  CODEX_SESSION_ID=""
-fi
+bash "<SCRIPT_DIR>/invoke-codex.sh" "<WORK_DIR>" "<CODEX_SESSION_ID>" "<CODEX_MODEL>"
 ```
 
 ```bash
@@ -253,16 +237,7 @@ fi
   echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
 } > /tmp/claude/ai-review-${REVIEW_ID}/gemini-prompt.txt
 
-bash "$SCRIPT_DIR/invoke-gemini.sh" \
-  "/tmp/claude/ai-review-${REVIEW_ID}" "${GEMINI_SESSION_UUID}" "${GEMINI_MODEL}"
-DEBATE_EXIT=$?
-if [ "$DEBATE_EXIT" -eq 0 ]; then
-  cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-output.md
-  GEMINI_SESSION_UUID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-session-id.txt 2>/dev/null || echo "")
-else
-  echo "⚠️ Gemini debate call failed (exit $DEBATE_EXIT) — skipping Gemini debate response."
-  GEMINI_SESSION_UUID=""
-fi
+bash "<SCRIPT_DIR>/invoke-gemini.sh" "<WORK_DIR>" "<GEMINI_SESSION_UUID>" "<GEMINI_MODEL>"
 ```
 
 ```bash
@@ -273,19 +248,10 @@ fi
   echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
 } > /tmp/claude/ai-review-${REVIEW_ID}/opus-prompt.txt
 
-bash "$SCRIPT_DIR/invoke-opus.sh" \
-  "/tmp/claude/ai-review-${REVIEW_ID}" "$OPUS_SESSION_ID" "${OPUS_MODEL}"
-DEBATE_EXIT=$?
-if [ "$DEBATE_EXIT" -eq 0 ]; then
-  cat /tmp/claude/ai-review-${REVIEW_ID}/opus-output.md
-  OPUS_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-session-id.txt 2>/dev/null || echo "")
-else
-  echo "⚠️ Opus debate call failed (exit $DEBATE_EXIT) — skipping Opus debate response."
-  OPUS_SESSION_ID=""
-fi
+bash "<SCRIPT_DIR>/invoke-opus.sh" "<WORK_DIR>" "<OPUS_SESSION_ID>" "<OPUS_MODEL>"
 ```
 
-If a session resume fails, skip that reviewer's debate response and note it.
+After each invoke call: check the exit code; on success read the reviewer's `*-output.md` and updated `*-session-id.txt`. If a session resume fails, skip that reviewer's debate response and note it.
 
 Display each debate exchange:
 

@@ -1,6 +1,6 @@
 ---
 description: Send the current plan to OpenAI Codex CLI for iterative review. Claude and Codex go back-and-forth until Codex approves or max 5 rounds reached.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(jq:*), Bash(timeout:*), Bash(gtimeout:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-codex.sh:*)
+allowed-tools: Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-codex.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*)
 ---
 
 # Codex Plan Review (Iterative)
@@ -39,22 +39,13 @@ After installing, re-run /debate:codex-review.
 
 **Script and timeout:**
 
-```bash
-PLUGIN_VERSION=$(jq -r '.plugins["debate@debate-dev"][0].version' ~/.claude/plugins/installed_plugins.json)
-SCRIPT_DIR=~/.claude/plugins/cache/debate-dev/debate/$PLUGIN_VERSION/scripts
-TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
-[ -z "$TIMEOUT_BIN" ] && echo "Warning: timeout not found. Install: brew install coreutils"
-```
-
-**Session ID and temp dir:**
+Run the setup helper and note `REVIEW_ID`, `WORK_DIR`, and `SCRIPT_DIR` from the output:
 
 ```bash
-REVIEW_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | head -c 8)
-mkdir -p /tmp/claude/ai-review-${REVIEW_ID}
+bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh
 ```
 
-Temp directory: `/tmp/claude/ai-review-${REVIEW_ID}/`
-Key files: `plan.md`, `codex-output.md`, `codex-session-id.txt`, `codex-exit.txt`
+Use `SCRIPT_DIR` from the output for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan.md`, `codex-output.md`, `codex-session-id.txt`, `codex-exit.txt`
 
 **Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/claude/ai-review-${REVIEW_ID}` before stopping.
 
@@ -68,18 +59,11 @@ Key files: `plan.md`, `codex-output.md`, `codex-session-id.txt`, `codex-exit.txt
 Run the Codex reviewer script (handles all codex flags, session capture, and retry logic internally):
 
 ```bash
-bash "$SCRIPT_DIR/invoke-codex.sh" \
-  "/tmp/claude/ai-review-${REVIEW_ID}" "" "$MODEL"
-CODEX_EXIT=$?
-if [ "$CODEX_EXIT" -eq 77 ]; then
-  cat /tmp/claude/ai-review-${REVIEW_ID}/codex-output.md; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-elif [ "$CODEX_EXIT" -eq 124 ]; then
-  echo "Codex timed out after 120s."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-elif [ "$CODEX_EXIT" -ne 0 ]; then
-  echo "Codex failed (exit $CODEX_EXIT)."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-fi
-CODEX_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-session-id.txt 2>/dev/null || echo "")
+bash "<SCRIPT_DIR>/invoke-codex.sh" \
+  "<WORK_DIR>" "" "<MODEL>"
 ```
+
+Check the exit code: 77 = sandbox panic (display `codex-output.md` and stop), 124 = timed out, non-zero = failed (cleanup and stop). On success, read `<WORK_DIR>/codex-session-id.txt` and note the content as `CODEX_SESSION_ID`.
 
 The script writes the review to `codex-output.md` and the session ID to `codex-session-id.txt`.
 
@@ -140,18 +124,11 @@ Write the resume prompt, then call the script — it handles resume vs fresh-fal
   echo "If more changes are needed, end with: VERDICT: REVISE"
 } > /tmp/claude/ai-review-${REVIEW_ID}/codex-prompt.txt
 
-bash "$SCRIPT_DIR/invoke-codex.sh" \
-  "/tmp/claude/ai-review-${REVIEW_ID}" "$CODEX_SESSION_ID" "$MODEL"
-CODEX_EXIT=$?
-if [ "$CODEX_EXIT" -eq 77 ]; then
-  cat /tmp/claude/ai-review-${REVIEW_ID}/codex-output.md; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-elif [ "$CODEX_EXIT" -eq 124 ]; then
-  echo "Codex timed out — stopping."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-elif [ "$CODEX_EXIT" -ne 0 ]; then
-  echo "Codex failed (exit $CODEX_EXIT) — stopping."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-fi
-CODEX_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/codex-session-id.txt 2>/dev/null || echo "")
+bash "<SCRIPT_DIR>/invoke-codex.sh" \
+  "<WORK_DIR>" "<CODEX_SESSION_ID>" "<MODEL>"
 ```
+
+Check exit code (77 = sandbox panic, 124 = timed out, non-zero = failed). On success, read `<WORK_DIR>/codex-session-id.txt` and update `CODEX_SESSION_ID`.
 
 Then go back to **Step 4** (Read Review & Check Verdict).
 

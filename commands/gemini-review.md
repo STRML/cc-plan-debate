@@ -1,6 +1,6 @@
 ---
 description: Send the current plan to Google Gemini CLI for iterative review. Claude and Gemini go back-and-forth until Gemini approves or max 5 rounds reached.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which gemini:*), Bash(jq:*), Bash(timeout:*), Bash(gtimeout:*), Bash(diff:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-gemini.sh:*), Bash(gemini -p:*), Bash(gemini --resume:*), Bash(gemini -s:*)
+allowed-tools: Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-gemini.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which gemini:*), Bash(gemini -s:*)
 ---
 
 # Gemini Plan Review (Iterative)
@@ -45,24 +45,13 @@ If the output does not contain "PONG" (case-insensitive), warn: `Gemini is not a
 
 **Model:** Check if a model argument was passed (e.g., `/debate:gemini-review gemini-2.0-flash`). If so, use it. Default: `gemini-3.1-pro-preview`. Store as `MODEL`.
 
-**Script and timeout:**
+Run the setup helper and note `REVIEW_ID`, `WORK_DIR`, and `SCRIPT_DIR` from the output:
 
 ```bash
-PLUGIN_VERSION=$(jq -r '.plugins["debate@debate-dev"][0].version' ~/.claude/plugins/installed_plugins.json)
-SCRIPT_DIR=~/.claude/plugins/cache/debate-dev/debate/$PLUGIN_VERSION/scripts
-TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
-[ -z "$TIMEOUT_BIN" ] && echo "Warning: timeout not found. Install: brew install coreutils"
+bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh
 ```
 
-**Session ID and temp dir:**
-
-```bash
-REVIEW_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | head -c 8)
-mkdir -p /tmp/claude/ai-review-${REVIEW_ID}
-```
-
-Temp directory: `/tmp/claude/ai-review-${REVIEW_ID}/`
-Key files: `plan.md`, `gemini-output.md`, `gemini-session-id.txt`, `gemini-exit.txt`
+Use `SCRIPT_DIR` from the output for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan.md`, `gemini-output.md`, `gemini-session-id.txt`, `gemini-exit.txt`
 
 **Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/claude/ai-review-${REVIEW_ID}` before stopping.
 
@@ -76,16 +65,11 @@ Key files: `plan.md`, `gemini-output.md`, `gemini-session-id.txt`, `gemini-exit.
 Run the Gemini reviewer script (handles all gemini flags, session UUID capture, and retry logic internally):
 
 ```bash
-bash "$SCRIPT_DIR/invoke-gemini.sh" \
-  "/tmp/claude/ai-review-${REVIEW_ID}" "" "$MODEL"
-GEMINI_EXIT=$?
-if [ "$GEMINI_EXIT" -eq 124 ]; then
-  echo "Gemini timed out after 120s."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-elif [ "$GEMINI_EXIT" -ne 0 ]; then
-  echo "Gemini failed (exit $GEMINI_EXIT)."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-fi
-GEMINI_SESSION_UUID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-session-id.txt 2>/dev/null || echo "")
+bash "<SCRIPT_DIR>/invoke-gemini.sh" \
+  "<WORK_DIR>" "" "<MODEL>"
 ```
+
+Check the exit code: 124 = timed out, non-zero = failed (cleanup and stop). On success, read `<WORK_DIR>/gemini-session-id.txt` and note the content as `GEMINI_SESSION_UUID`.
 
 The script writes the review to `gemini-output.md` and the session UUID to `gemini-session-id.txt`.
 
@@ -143,16 +127,11 @@ Write the resume prompt, then call the script — it handles resume vs fresh-fal
   echo "If more changes are needed, end with: VERDICT: REVISE"
 } > /tmp/claude/ai-review-${REVIEW_ID}/gemini-prompt.txt
 
-bash "$SCRIPT_DIR/invoke-gemini.sh" \
-  "/tmp/claude/ai-review-${REVIEW_ID}" "$GEMINI_SESSION_UUID" "$MODEL"
-GEMINI_EXIT=$?
-if [ "$GEMINI_EXIT" -eq 124 ]; then
-  echo "Gemini timed out — stopping."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-elif [ "$GEMINI_EXIT" -ne 0 ]; then
-  echo "Gemini failed (exit $GEMINI_EXIT) — stopping."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-fi
-GEMINI_SESSION_UUID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/gemini-session-id.txt 2>/dev/null || echo "")
+bash "<SCRIPT_DIR>/invoke-gemini.sh" \
+  "<WORK_DIR>" "<GEMINI_SESSION_UUID>" "<MODEL>"
 ```
+
+Check exit code (124 = timed out, non-zero = failed). On success, read `<WORK_DIR>/gemini-session-id.txt` and update `GEMINI_SESSION_UUID`.
 
 Then go back to **Step 4** (Read Review & Check Verdict).
 

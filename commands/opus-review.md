@@ -1,6 +1,6 @@
 ---
 description: Send the current plan to Claude Opus for iterative review. Claude and Opus go back-and-forth until Opus approves or max 5 rounds reached.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(timeout:*), Bash(gtimeout:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-opus.sh:*)
+allowed-tools: Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-opus.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which claude:*), Bash(which jq:*)
 ---
 
 # Opus Plan Review (Iterative)
@@ -49,22 +49,13 @@ After installing, re-run /debate:opus-review.
 
 **Script and timeout:**
 
-```bash
-PLUGIN_VERSION=$(jq -r '.plugins["debate@debate-dev"][0].version' ~/.claude/plugins/installed_plugins.json)
-SCRIPT_DIR=~/.claude/plugins/cache/debate-dev/debate/$PLUGIN_VERSION/scripts
-TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
-[ -z "$TIMEOUT_BIN" ] && echo "Warning: timeout not found. Install: brew install coreutils"
-```
-
-**Session ID and temp dir:**
+Run the setup helper and note `REVIEW_ID`, `WORK_DIR`, and `SCRIPT_DIR` from the output:
 
 ```bash
-REVIEW_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | head -c 8)
-mkdir -p /tmp/claude/ai-review-${REVIEW_ID}
+bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh
 ```
 
-Temp directory: `/tmp/claude/ai-review-${REVIEW_ID}/`
-Key files: `plan.md`, `opus-output.md`, `opus-session-id.txt`, `opus-exit.txt`
+Use `SCRIPT_DIR` from the output for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan.md`, `opus-output.md`, `opus-session-id.txt`, `opus-exit.txt`
 
 **Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/claude/ai-review-${REVIEW_ID}` before stopping.
 
@@ -78,16 +69,11 @@ Key files: `plan.md`, `opus-output.md`, `opus-session-id.txt`, `opus-exit.txt`
 Run the Opus reviewer script (handles all claude flags, session capture, and retry logic internally):
 
 ```bash
-bash "$SCRIPT_DIR/invoke-opus.sh" \
-  "/tmp/claude/ai-review-${REVIEW_ID}" "" "$MODEL"
-OPUS_EXIT=$?
-if [ "$OPUS_EXIT" -eq 124 ]; then
-  echo "Opus timed out after 300s."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-elif [ "$OPUS_EXIT" -ne 0 ]; then
-  echo "Opus failed (exit $OPUS_EXIT)."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-fi
-OPUS_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-session-id.txt 2>/dev/null || echo "")
+bash "<SCRIPT_DIR>/invoke-opus.sh" \
+  "<WORK_DIR>" "" "<MODEL>"
 ```
+
+Check the exit code: 124 = timed out, non-zero = failed (cleanup and stop). On success, read `<WORK_DIR>/opus-session-id.txt` and note the content as `OPUS_SESSION_ID`.
 
 The script writes the review to `opus-output.md` and the session ID to `opus-session-id.txt`.
 
@@ -148,16 +134,11 @@ Write the resume prompt, then call the script — it handles resume vs fresh-fal
   echo "If more changes are needed, end with: VERDICT: REVISE"
 } > /tmp/claude/ai-review-${REVIEW_ID}/opus-prompt.txt
 
-bash "$SCRIPT_DIR/invoke-opus.sh" \
-  "/tmp/claude/ai-review-${REVIEW_ID}" "$OPUS_SESSION_ID" "$MODEL"
-OPUS_EXIT=$?
-if [ "$OPUS_EXIT" -eq 124 ]; then
-  echo "Opus timed out — stopping."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-elif [ "$OPUS_EXIT" -ne 0 ]; then
-  echo "Opus failed (exit $OPUS_EXIT) — stopping."; rm -rf /tmp/claude/ai-review-${REVIEW_ID}; exit 1
-fi
-OPUS_SESSION_ID=$(cat /tmp/claude/ai-review-${REVIEW_ID}/opus-session-id.txt 2>/dev/null || echo "")
+bash "<SCRIPT_DIR>/invoke-opus.sh" \
+  "<WORK_DIR>" "<OPUS_SESSION_ID>" "<MODEL>"
 ```
+
+Check exit code (124 = timed out, non-zero = failed). On success, read `<WORK_DIR>/opus-session-id.txt` and update `OPUS_SESSION_ID`.
 
 Then go back to **Step 4** (Read Review & Check Verdict).
 

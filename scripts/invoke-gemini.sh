@@ -27,7 +27,7 @@
 
 WORK_DIR="${1:-}"
 SESSION_UUID="${2:-}"
-MODEL="${3:-gemini-2.5-pro}"
+MODEL="${3:-gemini-3.1-pro-preview}"
 
 if [ -z "$WORK_DIR" ]; then
   echo "Usage: $0 <work_dir> [session_uuid] [model]" >&2
@@ -109,6 +109,26 @@ if [ -z "$SESSION_UUID" ]; then
     < "$WORK_DIR/plan.md" \
     > "$WORK_DIR/gemini-output.md" 2>"$WORK_DIR/gemini-stderr.log"
   GEMINI_EXIT=$?
+
+  # On failure (not timeout): reprobe for the best accessible model and retry once.
+  if [ "$GEMINI_EXIT" -ne 0 ] && [ "$GEMINI_EXIT" -ne 124 ]; then
+    SCRIPT_DIR_SELF="$(cd "$(dirname "$0")" && pwd)"
+    PROBED_MODEL=$(bash "$SCRIPT_DIR_SELF/probe-model.sh" gemini "$WORK_DIR" --fresh 2>/dev/null)
+    PROBE_STATUS=$?
+    if [ "$PROBE_STATUS" -eq 0 ] && [ -n "$PROBED_MODEL" ] && [ "$PROBED_MODEL" != "$MODEL" ]; then
+      echo "invoke-gemini.sh: '$MODEL' unavailable — retrying with '$PROBED_MODEL'" >&2
+      MODEL="$PROBED_MODEL"
+      touch "$WORK_DIR/gemini-call-start"
+      "${TIMEOUT_CMD[@]}" gemini \
+        -p "$PROMPT" \
+        -m "$MODEL" \
+        -s \
+        -e "" \
+        < "$WORK_DIR/plan.md" \
+        > "$WORK_DIR/gemini-output.md" 2>"$WORK_DIR/gemini-stderr.log"
+      GEMINI_EXIT=$?
+    fi
+  fi
 fi
 
 echo "$GEMINI_EXIT" > "$WORK_DIR/gemini-exit.txt"

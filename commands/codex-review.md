@@ -68,7 +68,7 @@ Key files: `plan.md`, `codex-output.md`, `codex-session-id.txt`, `codex-exit.txt
 Run the Codex reviewer script (handles all codex flags, session capture, and retry logic internally):
 
 ```bash
-TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" \
+bash "$SCRIPT_DIR/invoke-codex.sh" \
   "/tmp/claude/ai-review-${REVIEW_ID}" "" "$MODEL"
 CODEX_EXIT=$?
 if [ "$CODEX_EXIT" -eq 77 ]; then
@@ -140,7 +140,7 @@ Write the resume prompt, then call the script — it handles resume vs fresh-fal
   echo "If more changes are needed, end with: VERDICT: REVISE"
 } > /tmp/claude/ai-review-${REVIEW_ID}/codex-prompt.txt
 
-TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" \
+bash "$SCRIPT_DIR/invoke-codex.sh" \
   "/tmp/claude/ai-review-${REVIEW_ID}" "$CODEX_SESSION_ID" "$MODEL"
 CODEX_EXIT=$?
 if [ "$CODEX_EXIT" -eq 77 ]; then

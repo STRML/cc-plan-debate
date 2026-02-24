@@ -1,6 +1,6 @@
 ---
 description: Run ALL available AI reviewers in parallel on the current plan, synthesize their feedback, debate contradictions, and produce a consensus verdict. Supports Codex, Gemini, and Claude Opus with graceful fallback if any are unavailable.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(cat:*), Bash(timeout:*), Bash(gtimeout:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/run-parallel.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-codex.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-opus.sh:*), Write(/tmp/claude/ai-review-*)
+allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(jq:*), Bash(cat:*), Bash(timeout:*), Bash(gtimeout:*), Bash(gemini -s:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/run-parallel.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-codex.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-opus.sh:*), Write(/tmp/claude/ai-review-*)
 ---
 
 # AI Multi-Model Plan Review
@@ -55,10 +55,10 @@ And skip Claude reviewer until jq is installed.
 If Gemini is available, verify it is authenticated:
 
 ```bash
-gemini --list-sessions > /dev/null 2>&1
+echo "reply with only the word PONG" | timeout 30 gemini -s -e "" 2>/dev/null
 ```
 
-If this fails, warn: `Gemini is not authenticated — run: gemini auth`
+If output does not contain "PONG" (case-insensitive), warn: `Gemini is not authenticated — run: gemini auth`
 
 **If NO reviewers are available**, stop and display the full install guide, then exit.
 
@@ -73,8 +73,8 @@ PLUGIN_VERSION=$(jq -r '.plugins["debate@debate-dev"][0].version' ~/.claude/plug
 SCRIPT_DIR=~/.claude/plugins/cache/debate-dev/debate/$PLUGIN_VERSION/scripts
 TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
 [ -z "$TIMEOUT_BIN" ] && echo "Warning: neither 'timeout' nor 'gtimeout' found. Install: brew install coreutils"
-CODEX_MODEL="${CODEX_MODEL:-gpt-4.1}"
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-2.5-pro}"
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.3-codex}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.1-pro-preview}"
 OPUS_MODEL="${OPUS_MODEL:-claude-opus-4-6}"
 ```
 

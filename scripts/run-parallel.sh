@@ -23,8 +23,8 @@ rm -f "$WORK_DIR"/codex-prompt.txt "$WORK_DIR"/gemini-prompt.txt "$WORK_DIR"/opu
 # Source config.env if present — provides CODEX_MODEL, GEMINI_MODEL, OPUS_MODEL overrides
 # written by the caller before invoking this script.
 [ -f "$WORK_DIR/config.env" ] && source "$WORK_DIR/config.env"
-CODEX_MODEL="${CODEX_MODEL:-gpt-4.1}"
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-2.5-pro}"
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.3-codex}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.1-pro-preview}"
 OPUS_MODEL="${OPUS_MODEL:-claude-opus-4-6}"
 
 # Timeouts are managed per-reviewer inside each invoke-*.sh script:

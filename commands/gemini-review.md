@@ -1,6 +1,6 @@
 ---
 description: Send the current plan to Google Gemini CLI for iterative review. Claude and Gemini go back-and-forth until Gemini approves or max 5 rounds reached.
-allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which gemini:*), Bash(gemini --list-sessions:*), Bash(jq:*), Bash(timeout:*), Bash(gtimeout:*), Bash(diff:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-gemini.sh:*), Bash(gemini -p:*), Bash(gemini --resume:*)
+allowed-tools: Bash(uuidgen:*), Bash(command -v:*), Bash(mkdir -p /tmp/claude/ai-review-:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which gemini:*), Bash(jq:*), Bash(timeout:*), Bash(gtimeout:*), Bash(diff:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-gemini.sh:*), Bash(gemini -p:*), Bash(gemini --resume:*), Bash(gemini -s:*)
 ---
 
 # Gemini Plan Review (Iterative)
@@ -36,10 +36,10 @@ After installing, re-run /debate:gemini-review.
 If `gemini` is found, check authentication:
 
 ```bash
-gemini --list-sessions > /dev/null 2>&1
+echo "reply with only the word PONG" | timeout 30 gemini -s -e "" 2>/dev/null
 ```
 
-If this fails (non-zero exit), warn: `Gemini is not authenticated. Run: gemini auth`
+If the output does not contain "PONG" (case-insensitive), warn: `Gemini is not authenticated. Run: gemini auth`
 
 ## Step 1: Setup
 
@@ -76,7 +76,7 @@ Key files: `plan.md`, `gemini-output.md`, `gemini-session-id.txt`, `gemini-exit.
 Run the Gemini reviewer script (handles all gemini flags, session UUID capture, and retry logic internally):
 
 ```bash
-TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-gemini.sh" \
+bash "$SCRIPT_DIR/invoke-gemini.sh" \
   "/tmp/claude/ai-review-${REVIEW_ID}" "" "$MODEL"
 GEMINI_EXIT=$?
 if [ "$GEMINI_EXIT" -eq 124 ]; then
@@ -143,7 +143,7 @@ Write the resume prompt, then call the script — it handles resume vs fresh-fal
   echo "If more changes are needed, end with: VERDICT: REVISE"
 } > /tmp/claude/ai-review-${REVIEW_ID}/gemini-prompt.txt
 
-TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-gemini.sh" \
+bash "$SCRIPT_DIR/invoke-gemini.sh" \
   "/tmp/claude/ai-review-${REVIEW_ID}" "$GEMINI_SESSION_UUID" "$MODEL"
 GEMINI_EXIT=$?
 if [ "$GEMINI_EXIT" -eq 124 ]; then

@@ -1,6 +1,6 @@
 ---
 description: Check debate plugin prerequisites, verify reviewers are installed and authenticated, and print the exact settings.json snippet for fully unattended (no-prompt) operation.
-allowed-tools: Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(command -v:*), Bash(codex --version:*), Bash(claude --version:*), Bash(timeout 30 gemini:*), Bash(grep -q:*), Bash(jq -e:*)
+allowed-tools: Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(command -v:*), Bash(codex --version:*), Bash(claude --version:*), Bash(timeout 30 gemini:*), Bash(grep -q:*), Bash(jq -e:*), Bash(jq:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/probe-model.sh:*)
 ---
 
 # debate — Setup & Permission Check
@@ -135,6 +135,27 @@ Report:
   "privacy": { "usageStatisticsEnabled": false },
   "telemetry": { "enabled": false }
   ```
+
+## Step 3e: Check available model tiers
+
+Probe which model tiers are accessible for each reviewer. Results are cached 24 hours in `~/.claude/debate-model-probe.json`.
+
+```bash
+bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/probe-model.sh codex
+```
+
+Report:
+- Exit 0 → `✅ codex model: <model>` (e.g. `gpt-5.3-codex`, `gpt-4.1`, or `gpt-4o`)
+- Exit 2 → `❌ codex: sandbox panic — cannot probe (add codex:* to sandbox.excludedCommands first)`
+- Exit 1 → `❌ codex: no model accessible — check API key and subscription`
+
+```bash
+bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/probe-model.sh gemini
+```
+
+Report:
+- Exit 0 → `✅ gemini model: <model>` (e.g. `gemini-3.1-pro-preview`, `gemini-2.5-pro`, or `gemini-2.0-flash`)
+- Exit 1 → `❌ gemini: no model accessible — run: gemini auth`
 
 ## Step 4: Check timeout binary
 

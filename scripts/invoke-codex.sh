@@ -25,7 +25,7 @@
 
 WORK_DIR="${1:-}"
 SESSION_ID="${2:-}"
-MODEL="${3:-gpt-4.1}"
+MODEL="${3:-gpt-5.3-codex}"
 
 if [ -z "$WORK_DIR" ]; then
   echo "Usage: $0 <work_dir> [session_id] [model]" >&2
@@ -101,6 +101,27 @@ if [ -z "$SESSION_ID" ]; then
     "$PROMPT" \
     2>&1 | tee "$WORK_DIR/codex-stdout.txt"
   CODEX_EXIT=${PIPESTATUS[0]}
+
+  # On failure (not sandbox panic, not timeout): check for model-availability error
+  # and reprobe for the best accessible model, then retry once.
+  if [ "$CODEX_EXIT" -ne 0 ] && [ "$CODEX_EXIT" -ne 124 ] \
+     && ! grep -q "Attempted to create a NULL object" "$WORK_DIR/codex-stdout.txt" 2>/dev/null; then
+    SCRIPT_DIR_SELF="$(cd "$(dirname "$0")" && pwd)"
+    PROBED_MODEL=$(bash "$SCRIPT_DIR_SELF/probe-model.sh" codex "$WORK_DIR" --fresh 2>/dev/null)
+    PROBE_STATUS=$?
+    if [ "$PROBE_STATUS" -eq 0 ] && [ -n "$PROBED_MODEL" ] && [ "$PROBED_MODEL" != "$MODEL" ]; then
+      echo "invoke-codex.sh: '$MODEL' unavailable — retrying with '$PROBED_MODEL'" >&2
+      MODEL="$PROBED_MODEL"
+      : > "$WORK_DIR/codex-stdout.txt"
+      "${TIMEOUT_CMD[@]}" codex exec \
+        -m "$MODEL" \
+        -s read-only \
+        --json \
+        "$PROMPT" \
+        2>&1 | tee "$WORK_DIR/codex-stdout.txt"
+      CODEX_EXIT=${PIPESTATUS[0]}
+    fi
+  fi
 fi
 
 echo "$CODEX_EXIT" > "$WORK_DIR/codex-exit.txt"

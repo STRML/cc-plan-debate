@@ -20,30 +20,37 @@ mkdir -p "$WORK_DIR" || { echo "Failed to create $WORK_DIR" >&2; exit 1; }
 # don't bleed into this fresh parallel review round.
 rm -f "$WORK_DIR"/codex-prompt.txt "$WORK_DIR"/gemini-prompt.txt "$WORK_DIR"/opus-prompt.txt
 
+# Source config.env if present — provides CODEX_MODEL, GEMINI_MODEL, OPUS_MODEL overrides
+# written by the caller before invoking this script.
+[ -f "$WORK_DIR/config.env" ] && source "$WORK_DIR/config.env"
+CODEX_MODEL="${CODEX_MODEL:-gpt-4.1}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-2.5-pro}"
+OPUS_MODEL="${OPUS_MODEL:-claude-opus-4-6}"
+
 # Timeouts are managed per-reviewer inside each invoke-*.sh script:
-# Codex/Gemini: 120s, Opus: 300s (claude CLI startup adds overhead).
-# TIMEOUT_BIN is passed via env to each subshell.
+# Codex: 120s, Gemini: 240s, Opus: 300s (claude CLI startup adds overhead).
+# TIMEOUT_BIN is passed as env to each subshell; invoke scripts also self-detect it.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PIDS=()
 
 if command -v codex > /dev/null 2>&1; then
   (
-    TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" "$WORK_DIR"
+    TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" "$WORK_DIR" "" "$CODEX_MODEL"
   ) &
   PIDS+=($!)
 fi
 
 if command -v gemini > /dev/null 2>&1; then
   (
-    TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-gemini.sh" "$WORK_DIR"
+    TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-gemini.sh" "$WORK_DIR" "" "$GEMINI_MODEL"
   ) &
   PIDS+=($!)
 fi
 
 if command -v claude > /dev/null 2>&1 && command -v jq > /dev/null 2>&1; then
   (
-    TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-opus.sh" "$WORK_DIR"
+    TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-opus.sh" "$WORK_DIR" "" "$OPUS_MODEL"
   ) &
   PIDS+=($!)
 fi

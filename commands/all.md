@@ -73,8 +73,8 @@ PLUGIN_VERSION=$(jq -r '.plugins["debate@debate-dev"][0].version' ~/.claude/plug
 SCRIPT_DIR=~/.claude/plugins/cache/debate-dev/debate/$PLUGIN_VERSION/scripts
 TIMEOUT_BIN=$(command -v timeout || command -v gtimeout || true)
 [ -z "$TIMEOUT_BIN" ] && echo "Warning: neither 'timeout' nor 'gtimeout' found. Install: brew install coreutils"
-CODEX_MODEL="${CODEX_MODEL:-gpt-5.3-codex}"
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.1-pro-preview}"
+CODEX_MODEL="${CODEX_MODEL:-gpt-4.1}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-2.5-pro}"
 OPUS_MODEL="${OPUS_MODEL:-claude-opus-4-6}"
 ```
 
@@ -83,6 +83,8 @@ OPUS_MODEL="${OPUS_MODEL:-claude-opus-4-6}"
 ```bash
 REVIEW_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | head -c 8)
 mkdir -p /tmp/claude/ai-review-${REVIEW_ID}
+printf 'CODEX_MODEL=%s\nGEMINI_MODEL=%s\nOPUS_MODEL=%s\n' "$CODEX_MODEL" "$GEMINI_MODEL" "$OPUS_MODEL" \
+  > /tmp/claude/ai-review-${REVIEW_ID}/config.env
 ```
 
 Temp file paths:
@@ -231,7 +233,7 @@ For each contradiction, send a targeted question to each reviewer in the disagre
   echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
 } > /tmp/claude/ai-review-${REVIEW_ID}/codex-prompt.txt
 
-TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" \
+bash "$SCRIPT_DIR/invoke-codex.sh" \
   "/tmp/claude/ai-review-${REVIEW_ID}" "${CODEX_SESSION_ID}" "${CODEX_MODEL}"
 DEBATE_EXIT=$?
 if [ "$DEBATE_EXIT" -eq 0 ]; then
@@ -251,7 +253,7 @@ fi
   echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
 } > /tmp/claude/ai-review-${REVIEW_ID}/gemini-prompt.txt
 
-TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-gemini.sh" \
+bash "$SCRIPT_DIR/invoke-gemini.sh" \
   "/tmp/claude/ai-review-${REVIEW_ID}" "${GEMINI_SESSION_UUID}" "${GEMINI_MODEL}"
 DEBATE_EXIT=$?
 if [ "$DEBATE_EXIT" -eq 0 ]; then
@@ -271,7 +273,7 @@ fi
   echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
 } > /tmp/claude/ai-review-${REVIEW_ID}/opus-prompt.txt
 
-TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-opus.sh" \
+bash "$SCRIPT_DIR/invoke-opus.sh" \
   "/tmp/claude/ai-review-${REVIEW_ID}" "$OPUS_SESSION_ID" "${OPUS_MODEL}"
 DEBATE_EXIT=$?
 if [ "$DEBATE_EXIT" -eq 0 ]; then
@@ -371,7 +373,7 @@ If any step failed before reaching this step, still run this cleanup.
 
 - **Security:** Never inline plan content or AI-generated text in shell strings — pass via file path, stdin redirect, or `$(cat file)` with a pre-written temp file
 - **Parallelism:** Execute the static runner script from the plugin (`scripts/run-parallel.sh`) — it manages job control and PID capture correctly. Never write a runner script dynamically.
-- **Timeout binary:** Resolve `TIMEOUT_BIN` at setup; pass as `TIMEOUT_BIN="$TIMEOUT_BIN"` env prefix to all `bash "$SCRIPT_DIR/invoke-*.sh"` calls — each script builds its own timeout command internally
+- **Timeout binary:** Resolve `TIMEOUT_BIN` at setup. Each invoke-*.sh script self-detects it via `command -v timeout`. Do NOT prefix bash calls with `TIMEOUT_BIN=...` — the env var prefix changes the command string and prevents sandbox exclusion pattern matching. Model vars go in `config.env`, not env var prefixes.
 - **Exit codes:** Check `$?` after each `bash "$SCRIPT_DIR/invoke-*.sh"` call — the script propagates the reviewer's exit code
 - **Graceful degradation:** If only 1 reviewer is available, run the full flow and skip the debate phase
 - **All-fail handling:** If all reviewers fail/timeout, return `UNDECIDED` with retry guidance

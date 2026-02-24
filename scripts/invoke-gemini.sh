@@ -27,7 +27,7 @@
 
 WORK_DIR="${1:-}"
 SESSION_UUID="${2:-}"
-MODEL="${3:-gemini-3.1-pro-preview}"
+MODEL="${3:-gemini-2.5-pro}"
 
 if [ -z "$WORK_DIR" ]; then
   echo "Usage: $0 <work_dir> [session_uuid] [model]" >&2

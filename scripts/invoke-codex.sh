@@ -25,7 +25,7 @@
 
 WORK_DIR="${1:-}"
 SESSION_ID="${2:-}"
-MODEL="${3:-gpt-5.3-codex}"
+MODEL="${3:-gpt-4.1}"
 
 if [ -z "$WORK_DIR" ]; then
   echo "Usage: $0 <work_dir> [session_id] [model]" >&2

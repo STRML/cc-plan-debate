@@ -35,6 +35,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PIDS=()
 
 if command -v codex > /dev/null 2>&1; then
+  echo "[debate] Spawning codex (${CODEX_MODEL})..." >&2
   (
     TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" "$WORK_DIR" "" "$CODEX_MODEL"
   ) &
@@ -42,6 +43,7 @@ if command -v codex > /dev/null 2>&1; then
 fi
 
 if command -v gemini > /dev/null 2>&1; then
+  echo "[debate] Spawning gemini (${GEMINI_MODEL})..." >&2
   (
     TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-gemini.sh" "$WORK_DIR" "" "$GEMINI_MODEL"
   ) &
@@ -49,6 +51,7 @@ if command -v gemini > /dev/null 2>&1; then
 fi
 
 if command -v claude > /dev/null 2>&1 && command -v jq > /dev/null 2>&1; then
+  echo "[debate] Spawning opus (${OPUS_MODEL})..." >&2
   (
     TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-opus.sh" "$WORK_DIR" "" "$OPUS_MODEL"
   ) &
@@ -56,6 +59,7 @@ if command -v claude > /dev/null 2>&1 && command -v jq > /dev/null 2>&1; then
 fi
 
 if [ ${#PIDS[@]} -gt 0 ]; then
+  echo "[debate] Waiting for ${#PIDS[@]} reviewer(s)..." >&2
   wait "${PIDS[@]}"
 fi
-echo "All reviewers complete"
+echo "[debate] All reviewers complete." >&2

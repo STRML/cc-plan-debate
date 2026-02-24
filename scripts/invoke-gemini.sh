@@ -77,6 +77,7 @@ touch "$WORK_DIR/gemini-call-start"
 GEMINI_EXIT=0
 
 if [ -n "$SESSION_UUID" ]; then
+  echo "[gemini] Resuming session with ${MODEL}..." >&2
   # Resume call
   "${TIMEOUT_CMD[@]}" gemini \
     --resume "$SESSION_UUID" \
@@ -100,6 +101,7 @@ if [ -n "$SESSION_UUID" ]; then
 fi
 
 if [ -z "$SESSION_UUID" ]; then
+  echo "[gemini] Submitting plan to ${MODEL} (timeout: ${GEMINI_TIMEOUT}s)..." >&2
   # Fresh call
   "${TIMEOUT_CMD[@]}" gemini \
     -p "$PROMPT" \
@@ -110,13 +112,21 @@ if [ -z "$SESSION_UUID" ]; then
     > "$WORK_DIR/gemini-output.md" 2>"$WORK_DIR/gemini-stderr.log"
   GEMINI_EXIT=$?
 
+  if [ "$GEMINI_EXIT" -eq 0 ]; then
+    echo "[gemini] Review received." >&2
+  elif [ "$GEMINI_EXIT" -eq 124 ]; then
+    echo "[gemini] Timed out after ${GEMINI_TIMEOUT}s." >&2
+  else
+    echo "[gemini] Failed (exit $GEMINI_EXIT)." >&2
+  fi
+
   # On failure (not timeout): reprobe for the best accessible model and retry once.
   if [ "$GEMINI_EXIT" -ne 0 ] && [ "$GEMINI_EXIT" -ne 124 ]; then
     SCRIPT_DIR_SELF="$(cd "$(dirname "$0")" && pwd)"
     PROBED_MODEL=$(bash "$SCRIPT_DIR_SELF/probe-model.sh" gemini "$WORK_DIR" --fresh 2>/dev/null)
     PROBE_STATUS=$?
     if [ "$PROBE_STATUS" -eq 0 ] && [ -n "$PROBED_MODEL" ] && [ "$PROBED_MODEL" != "$MODEL" ]; then
-      echo "invoke-gemini.sh: '$MODEL' unavailable — retrying with '$PROBED_MODEL'" >&2
+      echo "[gemini] '$MODEL' unavailable — retrying with '$PROBED_MODEL'..." >&2
       MODEL="$PROBED_MODEL"
       touch "$WORK_DIR/gemini-call-start"
       "${TIMEOUT_CMD[@]}" gemini \

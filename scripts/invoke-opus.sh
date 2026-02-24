@@ -89,6 +89,7 @@ unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 OPUS_EXIT=0
 
 if [ -n "$SESSION_ID" ]; then
+  echo "[opus] Resuming session with ${MODEL} (timeout: 300s)..." >&2
   # Attempt session resume
   "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude --resume "$SESSION_ID" \
     -p "$PROMPT" \
@@ -108,6 +109,7 @@ if [ -n "$SESSION_ID" ]; then
 fi
 
 if [ -z "$SESSION_ID" ]; then
+  echo "[opus] Submitting plan to ${MODEL} (timeout: 300s)..." >&2
   # Fresh call (either initial or fallback from failed resume)
   "${OPUS_TIMEOUT_CMD[@]}" env CLAUDE_CODE_SIMPLE=1 claude \
     --model "$MODEL" \
@@ -115,6 +117,14 @@ if [ -z "$SESSION_ID" ]; then
     "${CLAUDE_FLAGS[@]}" \
     > "$WORK_DIR/opus-raw.json"
   OPUS_EXIT=$?
+fi
+
+if [ "$OPUS_EXIT" -eq 0 ]; then
+  echo "[opus] Review received." >&2
+elif [ "$OPUS_EXIT" -eq 124 ]; then
+  echo "[opus] Timed out after 300s." >&2
+else
+  echo "[opus] Failed (exit $OPUS_EXIT)." >&2
 fi
 
 if [ "$OPUS_EXIT" -eq 0 ]; then

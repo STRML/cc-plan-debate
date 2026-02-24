@@ -76,6 +76,7 @@ fi
 CODEX_EXIT=0
 
 if [ -n "$SESSION_ID" ]; then
+  echo "[codex] Resuming session with ${MODEL} (timeout: 120s)..." >&2
   # Resume: --json flag outputs JSONL; session ID extracted from thread.started event
   "${TIMEOUT_CMD[@]}" codex exec resume --json "$SESSION_ID" "$PROMPT" \
     2>&1 | tee "$WORK_DIR/codex-stdout.txt"
@@ -93,6 +94,7 @@ if [ -n "$SESSION_ID" ]; then
 fi
 
 if [ -z "$SESSION_ID" ]; then
+  echo "[codex] Submitting plan to ${MODEL} (timeout: 120s)..." >&2
   # Fresh call: --json outputs JSONL to stdout; no -o needed (extracted below)
   "${TIMEOUT_CMD[@]}" codex exec \
     -m "$MODEL" \
@@ -102,6 +104,14 @@ if [ -z "$SESSION_ID" ]; then
     2>&1 | tee "$WORK_DIR/codex-stdout.txt"
   CODEX_EXIT=${PIPESTATUS[0]}
 
+  if [ "$CODEX_EXIT" -eq 0 ]; then
+    echo "[codex] Review received." >&2
+  elif [ "$CODEX_EXIT" -eq 124 ]; then
+    echo "[codex] Timed out after 120s." >&2
+  else
+    echo "[codex] Failed (exit $CODEX_EXIT)." >&2
+  fi
+
   # On failure (not sandbox panic, not timeout): check for model-availability error
   # and reprobe for the best accessible model, then retry once.
   if [ "$CODEX_EXIT" -ne 0 ] && [ "$CODEX_EXIT" -ne 124 ] \
@@ -110,7 +120,7 @@ if [ -z "$SESSION_ID" ]; then
     PROBED_MODEL=$(bash "$SCRIPT_DIR_SELF/probe-model.sh" codex "$WORK_DIR" --fresh 2>/dev/null)
     PROBE_STATUS=$?
     if [ "$PROBE_STATUS" -eq 0 ] && [ -n "$PROBED_MODEL" ] && [ "$PROBED_MODEL" != "$MODEL" ]; then
-      echo "invoke-codex.sh: '$MODEL' unavailable — retrying with '$PROBED_MODEL'" >&2
+      echo "[codex] '$MODEL' unavailable — retrying with '$PROBED_MODEL'..." >&2
       MODEL="$PROBED_MODEL"
       : > "$WORK_DIR/codex-stdout.txt"
       "${TIMEOUT_CMD[@]}" codex exec \

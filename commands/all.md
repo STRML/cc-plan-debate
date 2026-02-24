@@ -1,6 +1,6 @@
 ---
 description: Run ALL available AI reviewers in parallel on the current plan, synthesize their feedback, debate contradictions, and produce a consensus verdict. Supports Codex, Gemini, and Claude Opus with graceful fallback if any are unavailable.
-allowed-tools: Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/run-parallel.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-codex.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-opus.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(gemini -s:*), Write(/tmp/claude/ai-review-*)
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/run-parallel.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-codex.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-opus.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(gemini -s:*), Write(/tmp/claude/ai-review-*)
 ---
 
 # AI Multi-Model Plan Review
@@ -66,10 +66,16 @@ If output does not contain "PONG" (case-insensitive), warn: `Gemini is not authe
 
 ### 1b. Generate session ID & temp dir
 
+If `~/.claude/debate-scripts` does not exist, stop and display:
+```
+~/.claude/debate-scripts not found.
+Run /debate:setup first to create the stable scripts symlink.
+```
+
 Run the setup helper and note `REVIEW_ID`, `WORK_DIR`, and `SCRIPT_DIR` from the output:
 
 ```bash
-bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh
+bash ~/.claude/debate-scripts/debate-setup.sh
 ```
 
 Then write `config.env` to `<WORK_DIR>/config.env` with the model values (use user-provided overrides or defaults):
@@ -80,7 +86,7 @@ GEMINI_MODEL=<GEMINI_MODEL|gemini-3.1-pro-preview>
 OPUS_MODEL=<OPUS_MODEL|claude-opus-4-6>
 ```
 
-Use `SCRIPT_DIR` from the setup output for all subsequent `bash` calls — never re-glob.
+Use `SCRIPT_DIR` for all subsequent `bash` calls — never re-glob.
 
 Temp file paths:
 - Plan: `/tmp/claude/ai-review-${REVIEW_ID}/plan.md`

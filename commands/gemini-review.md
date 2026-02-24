@@ -1,6 +1,6 @@
 ---
 description: Send the current plan to Google Gemini CLI for iterative review. Claude and Gemini go back-and-forth until Gemini approves or max 5 rounds reached.
-allowed-tools: Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-gemini.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which gemini:*), Bash(gemini -s:*)
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-gemini.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which gemini:*), Bash(gemini -s:*)
 ---
 
 # Gemini Plan Review (Iterative)
@@ -45,13 +45,19 @@ If the output does not contain "PONG" (case-insensitive), warn: `Gemini is not a
 
 **Model:** Check if a model argument was passed (e.g., `/debate:gemini-review gemini-2.0-flash`). If so, use it. Default: `gemini-3.1-pro-preview`. Store as `MODEL`.
 
+If `~/.claude/debate-scripts` does not exist, stop and display:
+```
+~/.claude/debate-scripts not found.
+Run /debate:setup first to create the stable scripts symlink.
+```
+
 Run the setup helper and note `REVIEW_ID`, `WORK_DIR`, and `SCRIPT_DIR` from the output:
 
 ```bash
-bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh
+bash ~/.claude/debate-scripts/debate-setup.sh
 ```
 
-Use `SCRIPT_DIR` from the output for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan.md`, `gemini-output.md`, `gemini-session-id.txt`, `gemini-exit.txt`
+Use `SCRIPT_DIR` for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan.md`, `gemini-output.md`, `gemini-session-id.txt`, `gemini-exit.txt`
 
 **Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/claude/ai-review-${REVIEW_ID}` before stopping.
 

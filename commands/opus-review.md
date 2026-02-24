@@ -1,6 +1,6 @@
 ---
 description: Send the current plan to Claude Opus for iterative review. Claude and Opus go back-and-forth until Opus approves or max 5 rounds reached.
-allowed-tools: Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-opus.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which claude:*), Bash(which jq:*)
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-opus.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which claude:*), Bash(which jq:*)
 ---
 
 # Opus Plan Review (Iterative)
@@ -47,15 +47,19 @@ After installing, re-run /debate:opus-review.
 
 **Model:** Check if a model argument was passed (e.g., `/debate:opus-review claude-opus-4-5`). If so, use it. Default: `claude-opus-4-6`. Store as `MODEL`.
 
-**Script and timeout:**
+If `~/.claude/debate-scripts` does not exist, stop and display:
+```
+~/.claude/debate-scripts not found.
+Run /debate:setup first to create the stable scripts symlink.
+```
 
 Run the setup helper and note `REVIEW_ID`, `WORK_DIR`, and `SCRIPT_DIR` from the output:
 
 ```bash
-bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh
+bash ~/.claude/debate-scripts/debate-setup.sh
 ```
 
-Use `SCRIPT_DIR` from the output for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan.md`, `opus-output.md`, `opus-session-id.txt`, `opus-exit.txt`
+Use `SCRIPT_DIR` for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan.md`, `opus-output.md`, `opus-session-id.txt`, `opus-exit.txt`
 
 **Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/claude/ai-review-${REVIEW_ID}` before stopping.
 

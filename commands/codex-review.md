@@ -1,6 +1,6 @@
 ---
 description: Send the current plan to OpenAI Codex CLI for iterative review. Claude and Codex go back-and-forth until Codex approves or max 5 rounds reached.
-allowed-tools: Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/invoke-codex.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*)
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-codex.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which codex:*)
 ---
 
 # Codex Plan Review (Iterative)
@@ -37,15 +37,19 @@ After installing, re-run /debate:codex-review.
 
 **Model:** Check if a model argument was passed (e.g., `/debate:codex-review o4-mini`). If so, use it. Default: `gpt-5.3-codex`. Store as `MODEL`.
 
-**Script and timeout:**
+If `~/.claude/debate-scripts` does not exist, stop and display:
+```
+~/.claude/debate-scripts not found.
+Run /debate:setup first to create the stable scripts symlink.
+```
 
 Run the setup helper and note `REVIEW_ID`, `WORK_DIR`, and `SCRIPT_DIR` from the output:
 
 ```bash
-bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/debate-setup.sh
+bash ~/.claude/debate-scripts/debate-setup.sh
 ```
 
-Use `SCRIPT_DIR` from the output for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan.md`, `codex-output.md`, `codex-session-id.txt`, `codex-exit.txt`
+Use `SCRIPT_DIR` for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan.md`, `codex-output.md`, `codex-session-id.txt`, `codex-exit.txt`
 
 **Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/claude/ai-review-${REVIEW_ID}` before stopping.
 

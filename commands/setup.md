@@ -1,6 +1,6 @@
 ---
 description: Check debate plugin prerequisites, verify reviewers are installed and authenticated, and print the exact settings.json snippet for fully unattended (no-prompt) operation.
-allowed-tools: Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(command -v:*), Bash(codex --version:*), Bash(claude --version:*), Bash(timeout 30 gemini:*), Bash(grep -q:*), Bash(jq -e:*), Bash(jq:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/probe-model.sh:*)
+allowed-tools: Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(command -v:*), Bash(codex --version:*), Bash(claude --version:*), Bash(timeout 30 gemini:*), Bash(grep -q:*), Bash(jq -e:*), Bash(jq:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/probe-model.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/create-links.sh:*)
 ---
 
 # debate — Setup & Permission Check
@@ -157,6 +157,21 @@ Report:
 - Exit 0 → `✅ gemini model: <model>` (e.g. `gemini-3.1-pro-preview`, `gemini-2.5-pro`, or `gemini-2.0-flash`)
 - Exit 1 → `❌ gemini: no model accessible — run: gemini auth`
 
+## Step 3f: Create stable scripts symlink
+
+Create `~/.claude/debate-scripts` pointing to the installed version's scripts directory.
+This symlink lets the main debate commands invoke scripts without version interpolation.
+
+```bash
+bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/create-links.sh
+```
+
+Report:
+- Exit 0 → `✅ ~/.claude/debate-scripts created`
+- Non-zero → `❌ symlink creation failed — check permissions on ~/.claude/`
+
+Note: Re-run `/debate:setup` after updating the plugin to refresh this symlink.
+
 ## Step 4: Check timeout binary
 
 ```bash
@@ -180,18 +195,17 @@ without any approval prompts, add the following to ~/.claude/settings.json:
 {
   "permissions": {
     "allow": [
-      "Bash(uuidgen:*)",
+      "Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*)",
+      "Bash(bash ~/.claude/debate-scripts/run-parallel.sh:*)",
+      "Bash(bash ~/.claude/debate-scripts/invoke-codex.sh:*)",
+      "Bash(bash ~/.claude/debate-scripts/invoke-gemini.sh:*)",
+      "Bash(bash ~/.claude/debate-scripts/invoke-opus.sh:*)",
       "Bash(command -v:*)",
       "Bash(which codex:*)",
       "Bash(which gemini:*)",
       "Bash(which claude:*)",
       "Bash(which jq:*)",
-      "Bash(jq:*)",
-      "Bash(mkdir -p /tmp/claude/ai-review-:*)",
       "Bash(rm -rf /tmp/claude/ai-review-:*)",
-      "Bash(chmod +x /tmp/claude/ai-review-:*)",
-      "Bash(/tmp/claude/ai-review-:*)",
-      "Bash(diff:*)",
       "Bash(codex exec -m:*)",
       "Bash(codex exec resume:*)",
       "Bash(gemini -p:*)",

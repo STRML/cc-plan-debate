@@ -1,14 +1,16 @@
 #!/bin/bash
 # Static parallel runner for debate plugin — executed by /debate:all
-# Usage: run-parallel.sh <REVIEW_ID> <TIMEOUT_BIN>
-#   REVIEW_ID   — 8-char hex ID used for all temp file paths
-#   TIMEOUT_BIN — path to timeout binary (optional; empty = no timeout)
+# Usage: run-parallel.sh <REVIEW_ID>
+#   REVIEW_ID — 8-char hex ID used for all temp file paths
+#
+# Reviewers are spawned with nohup + disown so they survive if the parent
+# shell is killed (e.g. Bash tool exit 144). Exit codes are polled via
+# *-exit.txt files written by each invoke-*.sh script.
 
 REVIEW_ID="$1"
-TIMEOUT_BIN="$2"
 
 if [ -z "$REVIEW_ID" ]; then
-  echo "Usage: $0 <REVIEW_ID> [TIMEOUT_BIN]" >&2
+  echo "Usage: $0 <REVIEW_ID>" >&2
   exit 1
 fi
 
@@ -27,39 +29,61 @@ CODEX_MODEL="${CODEX_MODEL:-gpt-5.3-codex}"
 GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.1-pro-preview}"
 OPUS_MODEL="${OPUS_MODEL:-claude-opus-4-6}"
 
-# Timeouts are managed per-reviewer inside each invoke-*.sh script:
-# Codex: 120s, Gemini: 240s, Opus: 300s (claude CLI startup adds overhead).
-# TIMEOUT_BIN is passed as env to each subshell; invoke scripts also self-detect it.
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PIDS=()
+
+# Track which exit files to wait for
+EXIT_FILES=()
 
 if command -v codex > /dev/null 2>&1; then
   echo "[debate] Spawning codex (${CODEX_MODEL})..." >&2
-  (
-    TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-codex.sh" "$WORK_DIR" "" "$CODEX_MODEL"
-  ) &
-  PIDS+=($!)
+  rm -f "$WORK_DIR/codex-exit.txt"
+  nohup bash "$SCRIPT_DIR/invoke-codex.sh" "$WORK_DIR" "" "$CODEX_MODEL" > /dev/null 2>&1 &
+  CODEX_PID=$!
+  disown $CODEX_PID
+  EXIT_FILES+=("$WORK_DIR/codex-exit.txt")
 fi
 
 if command -v gemini > /dev/null 2>&1; then
   echo "[debate] Spawning gemini (${GEMINI_MODEL})..." >&2
-  (
-    TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-gemini.sh" "$WORK_DIR" "" "$GEMINI_MODEL"
-  ) &
-  PIDS+=($!)
+  rm -f "$WORK_DIR/gemini-exit.txt"
+  nohup bash "$SCRIPT_DIR/invoke-gemini.sh" "$WORK_DIR" "" "$GEMINI_MODEL" > /dev/null 2>&1 &
+  GEMINI_PID=$!
+  disown $GEMINI_PID
+  EXIT_FILES+=("$WORK_DIR/gemini-exit.txt")
 fi
 
 if command -v claude > /dev/null 2>&1 && command -v jq > /dev/null 2>&1; then
   echo "[debate] Spawning opus (${OPUS_MODEL})..." >&2
-  (
-    TIMEOUT_BIN="$TIMEOUT_BIN" bash "$SCRIPT_DIR/invoke-opus.sh" "$WORK_DIR" "" "$OPUS_MODEL"
-  ) &
-  PIDS+=($!)
+  rm -f "$WORK_DIR/opus-exit.txt"
+  nohup bash "$SCRIPT_DIR/invoke-opus.sh" "$WORK_DIR" "" "$OPUS_MODEL" > /dev/null 2>&1 &
+  OPUS_PID=$!
+  disown $OPUS_PID
+  EXIT_FILES+=("$WORK_DIR/opus-exit.txt")
 fi
 
-if [ ${#PIDS[@]} -gt 0 ]; then
-  echo "[debate] Waiting for ${#PIDS[@]} reviewer(s)..." >&2
-  wait "${PIDS[@]}"
+if [ ${#EXIT_FILES[@]} -eq 0 ]; then
+  echo "[debate] No reviewers available." >&2
+  exit 1
 fi
+
+echo "[debate] Waiting for ${#EXIT_FILES[@]} reviewer(s)..." >&2
+
+# Poll for exit files. Each invoke-*.sh writes an exit code to *-exit.txt when done.
+# Polling allows this script to detect completion even after a parent-kill / restart.
+POLL_INTERVAL=2
+ELAPSED=0
+MAX_WAIT="${POLL_MAX_WAIT:-450}"  # longer than max opus timeout (300s) + buffer
+
+while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
+  DONE=0
+  for f in "${EXIT_FILES[@]}"; do
+    [ -f "$f" ] && DONE=$((DONE + 1))
+  done
+  if [ "$DONE" -ge "${#EXIT_FILES[@]}" ]; then
+    break
+  fi
+  sleep "$POLL_INTERVAL"
+  ELAPSED=$((ELAPSED + POLL_INTERVAL))
+done
+
 echo "[debate] All reviewers complete." >&2

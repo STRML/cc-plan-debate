@@ -1,13 +1,13 @@
 {
   "name": "debate",
-  "version": "1.1.15",
+  "version": "1.1.17",
   "description": "Multi-model AI plan review: run Codex and Gemini in parallel, synthesize feedback, debate contradictions",
   "author": {
     "name": "strml",
     "url": "https://github.com/strml"
   },
-  "homepage": "https://github.com/strml/cc-plugin-ai-review",
-  "repository": "https://github.com/strml/cc-plugin-ai-review",
+  "homepage": "https://github.com/STRML/cc-plan-debate",
+  "repository": "https://github.com/STRML/cc-plan-debate",
   "license": "MIT",
   "keywords": ["review", "codex", "gemini", "ai", "plan-review", "multi-model", "debate"]
 }

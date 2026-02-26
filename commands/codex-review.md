@@ -7,6 +7,8 @@ allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash 
 
 Send the current implementation plan to OpenAI Codex for review. Claude revises the plan based on Codex's feedback and re-submits until Codex approves. Max 5 rounds.
 
+> **Team mode:** If Claude Code's agent teams are available (`TeamCreate` tool present), use `/debate:all` instead to run Codex alongside other reviewers in parallel — including teammate agents as substitutes for any missing CLIs.
+
 Codex plays the role of **The Executor** — a pragmatic runtime tracer focused on shell correctness, exit codes, race conditions, and file I/O.
 
 ---

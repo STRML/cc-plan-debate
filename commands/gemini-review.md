@@ -7,6 +7,8 @@ allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash 
 
 Send the current implementation plan to Google Gemini for review. Claude revises the plan based on Gemini's feedback and re-submits until Gemini approves. Max 5 rounds.
 
+> **Team mode:** If Claude Code's agent teams are available (`TeamCreate` tool present), use `/debate:all` instead to run Gemini alongside other reviewers in parallel — including teammate agents as substitutes for any missing CLIs.
+
 Gemini plays the role of **The Architect** — a systems architect focused on approach validity, over-engineering, missing phases, and graceful degradation.
 
 ---

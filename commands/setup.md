@@ -157,6 +157,60 @@ Report:
 - Exit 0 → `✅ gemini model: <model>` (e.g. `gemini-3.1-pro-preview`, `gemini-2.5-pro`, or `gemini-2.0-flash`)
 - Exit 1 → `❌ gemini: no model accessible — run: gemini auth`
 
+## Step 3e2: Check sandbox network and filesystem allowlists
+
+The debate plugin calls `api.anthropic.com` (for Claude Opus) and `http-intake.logs.us5.datadoghq.com` (Datadog telemetry). The work directory `/tmp/claude/ai-review-*` must also be readable and editable inside the sandbox.
+
+**Network — check for `api.anthropic.com` in `sandbox.network.allowedHosts`:**
+
+```bash
+jq -e '.sandbox.network.allowedHosts | index("api.anthropic.com") != null' "$HOME/.claude/settings.json" > /dev/null 2>&1
+```
+
+Report:
+- Exit 0 → `✅ sandbox: api.anthropic.com whitelisted`
+- Non-zero → `❌ sandbox: api.anthropic.com not whitelisted — add to sandbox.network.allowedHosts in ~/.claude/settings.json`
+
+```bash
+jq -e '.sandbox.network.allowedHosts | index("http-intake.logs.us5.datadoghq.com") != null' "$HOME/.claude/settings.json" > /dev/null 2>&1
+```
+
+Report:
+- Exit 0 → `✅ sandbox: http-intake.logs.us5.datadoghq.com whitelisted`
+- Non-zero → `❌ sandbox: http-intake.logs.us5.datadoghq.com not whitelisted — add to sandbox.network.allowedHosts in ~/.claude/settings.json`
+
+**Filesystem — check for Read/Edit permissions on work dir:**
+
+```bash
+jq -e '.permissions.allow | index("Read(/tmp/claude/ai-review*)") != null' "$HOME/.claude/settings.json" > /dev/null 2>&1
+jq -e '.permissions.allow | index("Edit(/tmp/claude/ai-review*)") != null' "$HOME/.claude/settings.json" > /dev/null 2>&1
+```
+
+Report:
+- Both exit 0 → `✅ sandbox: /tmp/claude/ai-review* read+edit allowed`
+- Any non-zero → `❌ sandbox: /tmp/claude/ai-review* missing read or edit permission — add to permissions.allow`
+
+If anything is missing, show this snippet to add to `~/.claude/settings.json`:
+
+```json
+{
+  "sandbox": {
+    "network": {
+      "allowedHosts": [
+        "api.anthropic.com",
+        "http-intake.logs.us5.datadoghq.com"
+      ]
+    }
+  },
+  "permissions": {
+    "allow": [
+      "Read(/tmp/claude/ai-review*)",
+      "Edit(/tmp/claude/ai-review*)"
+    ]
+  }
+}
+```
+
 ## Step 3f: Create stable scripts symlink
 
 Create `~/.claude/debate-scripts` pointing to the installed version's scripts directory.
@@ -205,6 +259,8 @@ without any approval prompts, add the following to ~/.claude/settings.json:
       "Bash(which gemini:*)",
       "Bash(which claude:*)",
       "Bash(which jq:*)",
+      "Read(/tmp/claude/ai-review*)",
+      "Edit(/tmp/claude/ai-review*)",
       "Bash(rm -rf /tmp/claude/ai-review-:*)",
       "Bash(codex exec -m:*)",
       "Bash(codex exec resume:*)",
@@ -215,6 +271,14 @@ without any approval prompts, add the following to ~/.claude/settings.json:
       "Bash(timeout:*)",
       "Bash(gtimeout:*)"
     ]
+  },
+  "sandbox": {
+    "network": {
+      "allowedHosts": [
+        "api.anthropic.com",
+        "http-intake.logs.us5.datadoghq.com"
+      ]
+    }
   }
 }
 

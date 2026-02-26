@@ -118,9 +118,54 @@ Timeout: codex 120s, gemini 240s, opus 300s
 
 Run `/debate:setup` to see the full permission allowlist and configure for unattended use.
 
+### 1e. Team Mode Check
+
+Check if the `TeamCreate` tool is available in this session. (`TeamCreate`, `SendMessage`, `TeamDelete`, `TaskCreate`, and `TaskUpdate` are Claude Code built-in tools provided as part of the teams API, currently in beta. They are present when Claude Code's teammate feature is enabled.)
+
+**If `TeamCreate` is available AND the user did not pass `shell-mode` as an argument:**
+
+Set `EXEC_MODE=team`. Announce:
+
+```text
+## Execution Mode — Team
+
+Agent teams are available. Reviewers will run as independent parallel Claude agents
+instead of background shell processes.
+
+For any missing CLI reviewer (codex, gemini), a Claude teammate will be substituted
+using the same reviewer persona.
+```
+
+Build `TEAM_REVIEWER_PLAN` — for each reviewer in `AVAILABLE_REVIEWERS`:
+- `codex` CLI found → type: `cli`
+- `codex` CLI missing → type: `teammate` (The Executor persona)
+- `gemini` CLI found → type: `cli`
+- `gemini` CLI missing → type: `teammate` (The Architect persona)
+- `claude` CLI found → type: `cli` (uses invoke-opus.sh subprocess)
+- `claude` CLI missing → type: `teammate` (The Skeptic persona)
+
+Note: in team mode, Opus can optionally run as `teammate` instead of a subprocess — if the `claude` CLI is missing, this is automatic.
+
+Display the plan:
+
+```text
+Reviewer plan (team mode):
+  [✅ cli / ⚡ teammate]  codex   — The Executor
+  [✅ cli / ⚡ teammate]  gemini  — The Architect
+  [✅ cli / ⚡ teammate]  opus    — The Skeptic
+```
+
+Where `⚡ teammate` indicates a CLI is missing and a Claude agent will substitute.
+
+**If `TeamCreate` is not available, or user passed `shell-mode`:**
+
+Set `EXEC_MODE=shell`. Proceed to Step 2 (shell mode below).
+
 ---
 
 ## Step 2: Parallel Review (Round N)
+
+### Option A — Shell Mode (`EXEC_MODE=shell`)
 
 **Execute the parallel runner script** from the plugin:
 
@@ -132,7 +177,105 @@ The script is pre-built in the plugin — Codex runs with 120s, Gemini with 240s
 
 **Important:** this Bash call blocks until all reviewers complete (up to 300s for Opus). Use `timeout: 360000` on the Bash tool call to avoid the default 2-minute kill.
 
-### Check exit codes
+### Option B — Team Mode (`EXEC_MODE=team`)
+
+Create the review team:
+
+```
+TeamCreate: name="debate-<REVIEW_ID>", description="Parallel AI plan review"
+```
+
+For each reviewer in `TEAM_REVIEWER_PLAN`, spawn a Task agent (`subagent_type: "general-purpose"`) in parallel. Use the appropriate instruction block:
+
+**CLI-type reviewer (codex or gemini) — run the invoke script:**
+```
+Run this command:
+  bash "<SCRIPT_DIR>/invoke-<name>.sh" "<WORK_DIR>" "" "<MODEL>"
+
+After it completes, read <WORK_DIR>/<name>-exit.txt and send me (the team lead) a message:
+  "<Name> complete. Exit: <exit_code>"
+Make no other changes.
+```
+
+**CLI-type Opus — run the invoke script:**
+```
+Run this command:
+  bash "<SCRIPT_DIR>/invoke-opus.sh" "<WORK_DIR>" "" "<MODEL>"
+
+After it completes, read <WORK_DIR>/opus-exit.txt and send me (the team lead) a message:
+  "Opus complete. Exit: <exit_code>"
+Make no other changes.
+```
+
+**Teammate-type Codex (CLI missing) — The Executor persona:**
+```
+You are The Executor — a pragmatic runtime tracer. Find what will actually break at runtime.
+
+Focus: shell correctness, exit code handling, race conditions, file I/O, command availability,
+error propagation, missing dependencies, timing assumptions.
+
+Read the plan at: <WORK_DIR>/plan.md
+
+Write your complete review to <WORK_DIR>/codex-output.md. Be specific and direct — cite
+the exact step or command that will fail and why. End your review with either:
+  VERDICT: APPROVED
+  VERDICT: REVISE
+
+Then write "0" to <WORK_DIR>/codex-exit.txt and write "" (empty) to <WORK_DIR>/codex-session-id.txt.
+Send me (the team lead) a message: "Codex complete. Exit: 0"
+```
+
+**Teammate-type Gemini (CLI missing) — The Architect persona:**
+```
+You are The Architect — a systems architect reviewing for structural integrity.
+
+Focus: approach validity, over-engineering, missing phases, graceful degradation,
+better alternatives, scalability risks, cross-cutting concerns.
+
+Read the plan at: <WORK_DIR>/plan.md
+
+Write your complete review to <WORK_DIR>/gemini-output.md. Be specific — cite the step
+or design decision that is structurally flawed. End your review with either:
+  VERDICT: APPROVED
+  VERDICT: REVISE
+
+Then write "0" to <WORK_DIR>/gemini-exit.txt and write "" (empty) to <WORK_DIR>/gemini-session-id.txt.
+Send me (the team lead) a message: "Gemini complete. Exit: 0"
+```
+
+**Teammate-type Opus (CLI missing) — The Skeptic persona:**
+```
+You are The Skeptic — a devil's advocate. Find what everyone else missed.
+
+Focus:
+1. Unstated assumptions — what is assumed true that could be false?
+2. Unhappy path — what breaks when the first thing goes wrong?
+3. Second-order failures — what does a partial success leave behind?
+4. Security — is any user-controlled content reaching a shell string?
+5. The one fatal flaw — if this plan has one, what is it?
+
+Read the plan at: <WORK_DIR>/plan.md
+
+Write your complete review to <WORK_DIR>/opus-output.md. Be specific and direct. End with either:
+  VERDICT: APPROVED
+  VERDICT: REVISE
+
+Then write "0" to <WORK_DIR>/opus-exit.txt and write "" (empty) to <WORK_DIR>/opus-session-id.txt.
+Send me (the team lead) a message: "Opus complete. Exit: 0"
+```
+
+Wait for `SendMessage` from all spawned reviewer agents. When all have reported (or 360s elapses), proceed.
+
+If an agent fails to report within 360s, treat that reviewer as timed-out (exit 124).
+
+Clean up the team:
+```
+TeamDelete
+```
+
+**Session IDs in team mode:** Teammate reviewers write empty session ID files — the debate phase (Step 5) will fall back to spawning fresh agents with full context. See Step 5 for team mode debate instructions.
+
+### Check exit codes (both modes)
 
 Read each `*-exit.txt` file:
 - `0` → success
@@ -221,6 +364,8 @@ Extract each reviewer's verdict. Determine **overall verdict**:
 Max 2 debate rounds. Skip if there are no contradictions.
 
 For each contradiction, send a targeted question to each reviewer in the disagreement via session resume.
+
+**Team mode note:** For CLI-based reviewers, use the invoke scripts with session IDs as normal. For teammate-type reviewers (those that ran as agents in Step 2), spawn a fresh general-purpose agent with full context: the reviewer's original output, the current plan, and the specific debate question. The agent writes its response to `<reviewer>-output.md` and exits — no session resume is needed.
 
 **Build debate prompts from files** — never interpolate reviewer positions directly into shell strings:
 

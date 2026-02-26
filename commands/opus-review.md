@@ -7,6 +7,8 @@ allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash 
 
 Send the current implementation plan to Claude Opus for review. Claude revises the plan based on Opus's feedback and re-submits until Opus approves. Max 5 rounds.
 
+> **Team mode:** If Claude Code's agent teams are available (`TeamCreate` tool present), use `/debate:all` instead to run Opus alongside Codex and Gemini reviewers in parallel — including teammate agents as substitutes for any missing CLIs.
+
 Opus plays the role of **The Skeptic** — a devil's advocate focused on unstated assumptions, unhappy paths, second-order failures, and security.
 
 ---

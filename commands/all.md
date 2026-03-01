@@ -118,23 +118,13 @@ Timeout: codex 120s, gemini 240s, opus 300s
 
 Run `/debate:setup` to see the full permission allowlist and configure for unattended use.
 
-### 1e. Team Mode Check
+### 1e. Execution Mode Check
 
 Check if the `TeamCreate` tool is available in this session. (`TeamCreate`, `SendMessage`, `TeamDelete`, `TaskCreate`, and `TaskUpdate` are Claude Code built-in tools provided as part of the teams API, currently in beta. They are present when Claude Code's teammate feature is enabled.)
 
-**If `TeamCreate` is available AND the user did not pass `shell-mode` as an argument:**
+**If user passed `shell-mode`:** Set `EXEC_MODE=shell`. Skip to Step 2.
 
-Set `EXEC_MODE=team`. Announce:
-
-```text
-## Execution Mode — Team
-
-Agent teams are available. Reviewers will run as independent parallel Claude agents
-instead of background shell processes.
-
-For any missing CLI reviewer (codex, gemini), a Claude teammate will be substituted
-using the same reviewer persona.
-```
+**If `TeamCreate` is available:**
 
 Build `TEAM_REVIEWER_PLAN` — for each reviewer in `AVAILABLE_REVIEWERS`:
 - `codex` CLI found → type: `cli`
@@ -144,9 +134,7 @@ Build `TEAM_REVIEWER_PLAN` — for each reviewer in `AVAILABLE_REVIEWERS`:
 - `claude` CLI found → type: `cli` (uses invoke-opus.sh subprocess)
 - `claude` CLI missing → type: `teammate` (The Skeptic persona)
 
-Note: in team mode, Opus can optionally run as `teammate` instead of a subprocess — if the `claude` CLI is missing, this is automatic.
-
-Display the plan:
+Display the reviewer plan:
 
 ```text
 Reviewer plan (team mode):
@@ -157,9 +145,18 @@ Reviewer plan (team mode):
 
 Where `⚡ teammate` indicates a CLI is missing and a Claude agent will substitute.
 
-**If `TeamCreate` is not available, or user passed `shell-mode`:**
+Attempt to create the review team:
 
-Set `EXEC_MODE=shell`. Proceed to Step 2 (shell mode below).
+```
+TeamCreate: name="debate-<REVIEW_ID>", description="Parallel AI plan review"
+```
+
+- On success → Set `EXEC_MODE=team`. Announce: `Execution mode: team (persistent agents across rounds)`
+- On failure → log the error, Set `EXEC_MODE=agent`. Announce: `TeamCreate failed — falling back to agent mode`
+
+**The team lives for the entire review session. Do NOT call `TeamCreate` again on subsequent rounds. `TeamDelete` is called only at Step 9.**
+
+**If `TeamCreate` is not available:** Set `EXEC_MODE=agent`. Announce: `Execution mode: agent (subagents with context injection for rounds 2+)`
 
 ---
 
@@ -179,35 +176,39 @@ The script is pre-built in the plugin — Codex runs with 120s, Gemini with 240s
 
 ### Option B — Team Mode (`EXEC_MODE=team`)
 
-Create the review team:
+The review team was created in Step 1e and persists for the full session. Do NOT call `TeamCreate` here.
 
-```
-TeamCreate: name="debate-<REVIEW_ID>", description="Parallel AI plan review"
-```
+**Round 1 — Spawn reviewer agents in parallel:**
 
-For each reviewer in `TEAM_REVIEWER_PLAN`, spawn a Task agent (`subagent_type: "general-purpose"`) in parallel. Use the appropriate instruction block:
+For each reviewer in `TEAM_REVIEWER_PLAN`, use the Agent tool with `team_name: "debate-<REVIEW_ID>"` and the explicit `name` below. Spawn all in parallel.
 
 **CLI-type reviewer (codex or gemini) — run the invoke script:**
+
+Agent `name`: `codex-reviewer` or `gemini-reviewer`
 ```
 Run this command:
   bash "<SCRIPT_DIR>/invoke-<name>.sh" "<WORK_DIR>" "" "<MODEL>"
 
 After it completes, read <WORK_DIR>/<name>-exit.txt and send me (the team lead) a message:
   "<Name> complete. Exit: <exit_code>"
-Make no other changes.
+Make no other changes. Wait for further instructions.
 ```
 
 **CLI-type Opus — run the invoke script:**
+
+Agent `name`: `opus-reviewer`
 ```
 Run this command:
   bash "<SCRIPT_DIR>/invoke-opus.sh" "<WORK_DIR>" "" "<MODEL>"
 
 After it completes, read <WORK_DIR>/opus-exit.txt and send me (the team lead) a message:
   "Opus complete. Exit: <exit_code>"
-Make no other changes.
+Make no other changes. Wait for further instructions.
 ```
 
 **Teammate-type Codex (CLI missing) — The Executor persona:**
+
+Agent `name`: `codex-reviewer`
 ```
 You are The Executor — a pragmatic runtime tracer. Find what will actually break at runtime.
 
@@ -221,11 +222,14 @@ the exact step or command that will fail and why. End your review with either:
   VERDICT: APPROVED
   VERDICT: REVISE
 
-Then write "0" to <WORK_DIR>/codex-exit.txt and write "" (empty) to <WORK_DIR>/codex-session-id.txt.
+Then write "0" to <WORK_DIR>/codex-exit.txt.
 Send me (the team lead) a message: "Codex complete. Exit: 0"
+Wait for further instructions — you may be asked to debate or re-review.
 ```
 
 **Teammate-type Gemini (CLI missing) — The Architect persona:**
+
+Agent `name`: `gemini-reviewer`
 ```
 You are The Architect — a systems architect reviewing for structural integrity.
 
@@ -239,11 +243,14 @@ or design decision that is structurally flawed. End your review with either:
   VERDICT: APPROVED
   VERDICT: REVISE
 
-Then write "0" to <WORK_DIR>/gemini-exit.txt and write "" (empty) to <WORK_DIR>/gemini-session-id.txt.
+Then write "0" to <WORK_DIR>/gemini-exit.txt.
 Send me (the team lead) a message: "Gemini complete. Exit: 0"
+Wait for further instructions — you may be asked to debate or re-review.
 ```
 
 **Teammate-type Opus (CLI missing) — The Skeptic persona:**
+
+Agent `name`: `opus-reviewer`
 ```
 You are The Skeptic — a devil's advocate. Find what everyone else missed.
 
@@ -260,22 +267,65 @@ Write your complete review to <WORK_DIR>/opus-output.md. Be specific and direct.
   VERDICT: APPROVED
   VERDICT: REVISE
 
-Then write "0" to <WORK_DIR>/opus-exit.txt and write "" (empty) to <WORK_DIR>/opus-session-id.txt.
+Then write "0" to <WORK_DIR>/opus-exit.txt.
 Send me (the team lead) a message: "Opus complete. Exit: 0"
+Wait for further instructions — you may be asked to debate or re-review.
 ```
 
-Wait for `SendMessage` from all spawned reviewer agents. When all have reported (or 360s elapses), proceed.
+Wait for `SendMessage` from all spawned reviewer agents (they arrive as new conversation turns). When all have reported (or 360s elapses from when the last agent was spawned), proceed.
 
 If an agent fails to report within 360s, treat that reviewer as timed-out (exit 124).
 
-Clean up the team:
+**Do NOT call `TeamDelete` here.** The team remains active for debates and revision rounds.
+
+**Round 2+ — Message existing teammates (do NOT spawn new agents):**
+
+For each teammate-type reviewer that succeeded in the previous round, send a `SendMessage`:
+
 ```
-TeamDelete
+Recipient: "<reviewer-name>"  (e.g. "codex-reviewer", "gemini-reviewer", "opus-reviewer")
+Content:
+  "The plan has been revised. Re-read <WORK_DIR>/plan.md (file has been updated).
+   Write your updated review to <WORK_DIR>/<name>-output.md, overwriting the previous.
+   End with VERDICT: APPROVED or VERDICT: REVISE.
+   Write '0' to <WORK_DIR>/<name>-exit.txt. Then message me: '<Name> complete.'"
 ```
 
-**Session IDs in team mode:** Teammate reviewers write empty session ID files — the debate phase (Step 5) will fall back to spawning fresh agents with full context. See Step 5 for team mode debate instructions.
+For CLI-type reviewers in Round 2+, run their invoke scripts directly via Bash (using session IDs from `*-session-id.txt`). Do not message their wrapper agent.
 
-### Check exit codes (both modes)
+**Per-reviewer fallback:** If a teammate-type reviewer fails to respond within 360s in Round 2+, fall back to a fresh agent spawn for that reviewer only, with injected context (see Option C below for the context injection pattern). The other teammates continue in team mode. Track each reviewer's active mode: `REVIEWER_MODE[<name>]=team|agent`.
+
+### Option C — Agent Mode (`EXEC_MODE=agent`)
+
+**Every round:** Spawn reviewer agents using the Agent tool with `run_in_background: true`.
+
+**Round 1 prompt** (same personas as Option B teammate-type, above).
+
+**Round 2+ prompt** — write context to a temp file first, then pass file path to agent:
+
+```bash
+# Write injected context to file — never interpolate review content into prompt strings
+cat > <WORK_DIR>/<name>-r<N>-context.md << 'EOF'
+[reviewer persona — same as Round 1]
+
+Your previous review (Round N-1):
+[content of <WORK_DIR>/<name>-output.md]
+
+Revision summary:
+[content of <WORK_DIR>/revisions.txt]
+
+Updated plan (review this carefully):
+[content of <WORK_DIR>/plan.md]
+
+Re-review the updated plan. You previously said [X]; if the revision addressed that concern, say so.
+End with VERDICT: APPROVED or VERDICT: REVISE.
+Write your review to <WORK_DIR>/<name>-output.md and write "0" to <WORK_DIR>/<name>-exit.txt.
+EOF
+```
+
+Spawn the agent with the context file path as its only instruction. Round 2+ spawns are sequential (acceptable — Round 1 parallelism is the critical path). Collect results via `TaskOutput`.
+
+### Check exit codes (all modes)
 
 Read each `*-exit.txt` file:
 - `0` → success
@@ -363,19 +413,18 @@ Extract each reviewer's verdict. Determine **overall verdict**:
 
 Max 2 debate rounds. Skip if there are no contradictions.
 
-For each contradiction, send a targeted question to each reviewer in the disagreement via session resume.
+For each contradiction, send a targeted question to each reviewer in the disagreement.
 
-**Team mode note:** For CLI-based reviewers, use the invoke scripts with session IDs as normal. For teammate-type reviewers (those that ran as agents in Step 2), spawn a fresh general-purpose agent with full context: the reviewer's original output, the current plan, and the specific debate question. The agent writes its response to `<reviewer>-output.md` and exits — no session resume is needed.
-
-**Build debate prompts from files** — never interpolate reviewer positions directly into shell strings:
+**Shell / CLI-type reviewers:** Use the invoke scripts with session IDs. Build debate prompts from files — never interpolate reviewer output directly into shell strings:
 
 ```bash
 # For Codex:
 {
-  echo "[Reviewer] raised a concern about [topic]: [their position]."
-  echo "You said: [Codex's position]."
-  echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
-} > /tmp/claude/ai-review-${REVIEW_ID}/codex-prompt.txt
+  echo "There is a disagreement on [topic]."
+  echo "The other reviewer's position is in: <WORK_DIR>/<other>-output.md"
+  echo "Your position is in: <WORK_DIR>/codex-output.md"
+  echo "Read both files. Do you stand by your position, or does their point change your assessment?"
+} > <WORK_DIR>/codex-prompt.txt
 
 bash "<SCRIPT_DIR>/invoke-codex.sh" "<WORK_DIR>" "<CODEX_SESSION_ID>" "<CODEX_MODEL>"
 ```
@@ -383,10 +432,11 @@ bash "<SCRIPT_DIR>/invoke-codex.sh" "<WORK_DIR>" "<CODEX_SESSION_ID>" "<CODEX_MO
 ```bash
 # For Gemini:
 {
-  echo "[Reviewer] raised a concern about [topic]: [their position]."
-  echo "You said: [Gemini's position]."
-  echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
-} > /tmp/claude/ai-review-${REVIEW_ID}/gemini-prompt.txt
+  echo "There is a disagreement on [topic]."
+  echo "The other reviewer's position is in: <WORK_DIR>/<other>-output.md"
+  echo "Your position is in: <WORK_DIR>/gemini-output.md"
+  echo "Read both files. Do you stand by your position, or does their point change your assessment?"
+} > <WORK_DIR>/gemini-prompt.txt
 
 bash "<SCRIPT_DIR>/invoke-gemini.sh" "<WORK_DIR>" "<GEMINI_SESSION_UUID>" "<GEMINI_MODEL>"
 ```
@@ -394,15 +444,32 @@ bash "<SCRIPT_DIR>/invoke-gemini.sh" "<WORK_DIR>" "<GEMINI_SESSION_UUID>" "<GEMI
 ```bash
 # For Opus:
 {
-  echo "[Reviewer] raised a concern about [topic]: [their position]."
-  echo "You said: [Opus's position]."
-  echo "Can you address this specific disagreement? Do you stand by your position, or does their point change your assessment?"
-} > /tmp/claude/ai-review-${REVIEW_ID}/opus-prompt.txt
+  echo "There is a disagreement on [topic]."
+  echo "The other reviewer's position is in: <WORK_DIR>/<other>-output.md"
+  echo "Your position is in: <WORK_DIR>/opus-output.md"
+  echo "Read both files. Do you stand by your position, or does their point change your assessment?"
+} > <WORK_DIR>/opus-prompt.txt
 
 bash "<SCRIPT_DIR>/invoke-opus.sh" "<WORK_DIR>" "<OPUS_SESSION_ID>" "<OPUS_MODEL>"
 ```
 
 After each invoke call: check the exit code; on success read the reviewer's `*-output.md` and updated `*-session-id.txt`. If a session resume fails, skip that reviewer's debate response and note it.
+
+**Team mode — teammate-type reviewers:** Send a `SendMessage` directly. Do NOT spawn fresh agents. The reviewer already has its full conversation history. Write the debate prompt to a file and have the reviewer read the output files itself — never include raw reviewer output in the SendMessage content:
+
+```bash
+{
+  echo "There is a disagreement on [topic]."
+  echo "The other reviewer's position is in: <WORK_DIR>/<other>-output.md"
+  echo "Your position is in: <WORK_DIR>/<name>-output.md"
+  echo "Read both files. Do you stand by your position, or does their point change your assessment?"
+  echo "Write your response to <WORK_DIR>/<name>-output.md. Then message me: '<Name> debate complete.'"
+} > <WORK_DIR>/<name>-debate-prompt.txt
+```
+
+SendMessage the teammate with only a brief summary and the file path to read — not the raw content. Wait for the teammate's response message before proceeding.
+
+**Agent mode — teammate-type reviewers:** Spawn a fresh agent with full context injected via temp file (reviewer's prior output + other reviewer's position + debate question). Agent writes to `<name>-output.md` and exits.
 
 Display each debate exchange:
 
@@ -458,7 +525,7 @@ VERDICT: SPLIT — Reviewers disagree. [Summary]. Claude recommends: [proceed/re
    - [What was changed and why]
    ```
 4. Rewrite `/tmp/claude/ai-review-${REVIEW_ID}/plan.md` with the revised plan
-5. Return to **Step 2** with incremented round counter
+5. Return to **Step 2** with incremented round counter. In team mode, do NOT call `TeamCreate` again — the team from Step 1e is still active; teammates will be messaged (Option B Round 2+).
 
 If max rounds (3) reached without unanimous approval:
 
@@ -494,11 +561,21 @@ Review complete. Clear context and implement this plan, or save it elsewhere fir
 
 ## Step 9: Cleanup
 
+In team mode, shut down the review team first:
+
+```
+TeamDelete
+```
+
+If `TeamDelete` fails, log a warning: `"TeamDelete failed for debate-<REVIEW_ID> — manual cleanup may be needed"` and continue.
+
+Then remove temp files:
+
 ```bash
 rm -rf /tmp/claude/ai-review-${REVIEW_ID}
 ```
 
-If any step failed before reaching this step, still run this cleanup.
+If any step failed before reaching this step, still run both cleanup steps (TeamDelete if in team mode, then rm -rf).
 
 ---
 
@@ -517,3 +594,6 @@ If any step failed before reaching this step, still run this cleanup.
 - **Debate guard:** Explicitly skip Step 5 if fewer than 2 reviewers succeeded
 - **Revision discipline:** Make real plan improvements, not cosmetic changes
 - **User control:** If a revision would contradict the user's explicit requirements, skip it and note it
+- **Team lifecycle:** `TeamCreate` once in Step 1e; `TeamDelete` once in Step 9 (failure is logged, not fatal). Never call `TeamCreate` inside Step 2 or between rounds. Never `TeamDelete` before Step 9 except on error cleanup.
+- **Exec mode discipline:** In team mode, never spawn new reviewer agents after Round 1 — use `SendMessage`. Per-reviewer fallback to agent-mode is allowed if a teammate goes silent (360s timeout). In agent mode, always inject full context via temp file for Round 2+ spawns.
+- **Injection safety — all modes:** Never interpolate reviewer output or plan content directly into `SendMessage` content strings or agent prompt strings. Always write to a temp file first; in team mode, send only file paths and have teammates read output files directly using their own filesystem access.

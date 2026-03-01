@@ -1,6 +1,6 @@
 ---
 description: Quick single-round Opus plan review using Claude's built-in Task tool (subagent). No CLI subprocess, no session management, no file I/O — just fast feedback. Use /debate:opus-review for iterative multi-round review.
-allowed-tools: Task(subagent_type: general-purpose)
+allowed-tools: "Task(subagent_type: general-purpose)"
 ---
 
 # Quick Opus Plan Review (Subagent)

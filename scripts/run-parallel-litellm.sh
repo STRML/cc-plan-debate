@@ -105,8 +105,11 @@ WORST_EXIT=0
 for f in "${EXIT_FILES[@]}"; do
   if [ -f "$f" ]; then
     CODE=$(cat "$f" 2>/dev/null)
-    if [[ "$CODE" =~ ^[0-9]+$ ]] && [ "$CODE" -gt "$WORST_EXIT" ]; then
-      WORST_EXIT="$CODE"
+    if [[ "$CODE" =~ ^[0-9]+$ ]]; then
+      [ "$CODE" -gt "$WORST_EXIT" ] && WORST_EXIT="$CODE"
+    else
+      echo "[debate] Warning: non-numeric exit code in $f: '$CODE'" >&2
+      [ "$WORST_EXIT" -eq 0 ] && WORST_EXIT=1
     fi
   else
     # Exit file missing means reviewer never completed

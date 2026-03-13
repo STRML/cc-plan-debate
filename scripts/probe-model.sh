@@ -34,7 +34,7 @@ fi
 
 case "$REVIEWER" in
   codex)  MODELS=("gpt-5.3-codex" "gpt-4.1" "gpt-4o") ;;
-  gemini) MODELS=("gemini-3.1-pro-preview" "gemini-2.5-pro" "gemini-2.0-flash") ;;
+  gemini) MODELS=("gemini-3.1-pro-preview" "gemini-3.0-pro-preview" "gemini-2.5-pro-preview" "gemini-2.5-pro" "gemini-2.5-flash" "gemini-2.0-flash") ;;
 esac
 
 CACHE_FILE="$HOME/.claude/debate-model-probe.json"

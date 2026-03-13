@@ -45,7 +45,7 @@ If the output does not contain "PONG" (case-insensitive), warn: `Gemini is not a
 
 ## Step 1: Setup
 
-**Model:** Check if a model argument was passed (e.g., `/debate:gemini-review gemini-2.0-flash`). If so, use it. Default: `gemini-3.1-pro-preview`. Store as `MODEL`.
+**Model:** Check if a model argument was passed (e.g., `/debate:gemini-review gemini-2.5-pro`). If so, store as `MODEL`. If not, leave `MODEL` empty — `invoke-gemini.sh` will auto-probe for the best available model.
 
 If `~/.claude/debate-scripts` does not exist, stop and display:
 ```
@@ -203,7 +203,7 @@ Max 5 rounds. Each round preserves Gemini's conversation context via session res
 ## Rules
 
 - Claude **actively revises the plan** based on Gemini feedback between rounds — not just passing messages
-- Default model is `gemini-3.1-pro-preview`. Accept model override (e.g., `/debate:gemini-review gemini-2.0-flash`)
+- Default: auto-probe for best available model. Accept explicit model override (e.g., `/debate:gemini-review gemini-2.5-pro`)
 - Max 5 review rounds to prevent infinite loops
 - Show the user each round's feedback and revisions so they can follow along
 - Never interpolate AI-generated text directly into shell strings — always build via file operations

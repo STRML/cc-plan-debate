@@ -87,7 +87,7 @@ Then write `config.env` to `<WORK_DIR>/config.env` with the model values (use us
 
 ```
 CODEX_MODEL=<CODEX_MODEL|gpt-5.3-codex>
-GEMINI_MODEL=<GEMINI_MODEL|gemini-3.1-pro-preview>
+GEMINI_MODEL=<GEMINI_MODEL|>
 OPUS_MODEL=<OPUS_MODEL|claude-opus-4-6>
 ```
 

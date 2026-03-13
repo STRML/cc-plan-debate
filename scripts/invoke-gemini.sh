@@ -6,7 +6,7 @@
 # Usage: invoke-gemini.sh <work_dir> [session_uuid] [model]
 #   work_dir     — temp directory for this review (must contain plan.md)
 #   session_uuid — optional; if set, attempts --resume; falls back to fresh on failure
-#   model        — optional; defaults to gemini-3.1-pro-preview
+#   model        — optional; if empty, auto-probes for best available model
 #
 # Env: TIMEOUT_BIN — optional path to timeout binary (timeout or gtimeout)
 #
@@ -27,7 +27,7 @@
 
 WORK_DIR="${1:-}"
 SESSION_UUID="${2:-}"
-MODEL="${3:-gemini-3.1-pro-preview}"
+MODEL="${3:-}"
 
 if [ -z "$WORK_DIR" ]; then
   echo "Usage: $0 <work_dir> [session_uuid] [model]" >&2
@@ -42,6 +42,22 @@ fi
 if [ ! -f "$WORK_DIR/plan.md" ]; then
   echo "invoke-gemini.sh: plan.md not found in $WORK_DIR" >&2
   exit 1
+fi
+
+# If no explicit model given, probe for the best available model first.
+# This avoids defaulting to a model name that doesn't exist (causing a failed
+# call + fallback to a worse model).
+if [ -z "$MODEL" ]; then
+  SCRIPT_DIR_SELF="$(cd "$(dirname "$0")" && pwd)"
+  echo "[gemini] Probing for best available model..." >&2
+  PROBED_MODEL=$(bash "$SCRIPT_DIR_SELF/probe-model.sh" gemini "$WORK_DIR" 2>/dev/null)
+  if [ -n "$PROBED_MODEL" ]; then
+    MODEL="$PROBED_MODEL"
+    echo "[gemini] Selected model: $MODEL" >&2
+  else
+    MODEL="gemini-2.5-pro"
+    echo "[gemini] Probe inconclusive — defaulting to $MODEL" >&2
+  fi
 fi
 
 # Resolve timeout
@@ -120,25 +136,6 @@ if [ -z "$SESSION_UUID" ]; then
     echo "[gemini] Failed (exit $GEMINI_EXIT)." >&2
   fi
 
-  # On failure (not timeout): reprobe for the best accessible model and retry once.
-  if [ "$GEMINI_EXIT" -ne 0 ] && [ "$GEMINI_EXIT" -ne 124 ]; then
-    SCRIPT_DIR_SELF="$(cd "$(dirname "$0")" && pwd)"
-    PROBED_MODEL=$(bash "$SCRIPT_DIR_SELF/probe-model.sh" gemini "$WORK_DIR" --fresh 2>/dev/null)
-    PROBE_STATUS=$?
-    if [ "$PROBE_STATUS" -eq 0 ] && [ -n "$PROBED_MODEL" ] && [ "$PROBED_MODEL" != "$MODEL" ]; then
-      echo "[gemini] '$MODEL' unavailable — retrying with '$PROBED_MODEL'..." >&2
-      MODEL="$PROBED_MODEL"
-      touch "$WORK_DIR/gemini-call-start"
-      "${TIMEOUT_CMD[@]}" gemini \
-        -p "$PROMPT" \
-        -m "$MODEL" \
-        -s \
-        -e "" \
-        < "$WORK_DIR/plan.md" \
-        > "$WORK_DIR/gemini-output.md" 2>"$WORK_DIR/gemini-stderr.log"
-      GEMINI_EXIT=$?
-    fi
-  fi
 fi
 
 echo "$GEMINI_EXIT" > "$WORK_DIR/gemini-exit.txt"

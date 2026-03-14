@@ -1,17 +1,20 @@
 #!/bin/bash
-# Generic reviewer invocation via LiteLLM's OpenAI-compatible API.
+# Generic reviewer invocation via any OpenAI-compatible API.
 # Stateless — no session resume. Each call sends full context.
 #
-# Usage: invoke-litellm.sh <work_dir> <reviewer_name> [model] [timeout]
+# Usage: invoke-openai-compat.sh <config_file> <work_dir> <reviewer_name> [model] [timeout]
+#   config_file   — path to JSON config (e.g. ~/.claude/debate-openrouter.json)
 #   work_dir      — temp directory (must contain plan.md)
 #   reviewer_name — e.g. "deepseek", "gemini", "opus"
 #   model         — optional override; falls back to config value
 #   timeout       — optional override; falls back to config value, then 120s
 #
-# Config: ~/.claude/debate-litellm.json
+# Config schema:
 #   {
-#     "base_url": "http://localhost:8200/v1",
-#     "api_key": "",
+#     "base_url": "https://openrouter.ai/api/v1",
+#     "api_key": "sk-or-...",
+#     "api_key_env": "OPENROUTER_API_KEY",
+#     "headers": { "X-Title": "cc-debate" },
 #     "reviewers": {
 #       "<name>": {
 #         "model": "...",
@@ -35,13 +38,14 @@
 
 set -euo pipefail
 
-WORK_DIR="${1:-}"
-REVIEWER="${2:-}"
-MODEL_ARG="${3:-}"
-TIMEOUT_ARG="${4:-}"
+CONFIG_FILE="${1:-}"
+WORK_DIR="${2:-}"
+REVIEWER="${3:-}"
+MODEL_ARG="${4:-}"
+TIMEOUT_ARG="${5:-}"
 
-if [ -z "$WORK_DIR" ] || [ -z "$REVIEWER" ]; then
-  echo "Usage: $0 <work_dir> <reviewer_name> [model] [timeout]" >&2
+if [ -z "$CONFIG_FILE" ] || [ -z "$WORK_DIR" ] || [ -z "$REVIEWER" ]; then
+  echo "Usage: $0 <config_file> <work_dir> <reviewer_name> [model] [timeout]" >&2
   exit 1
 fi
 
@@ -53,7 +57,7 @@ create_exit_file() {
   if [ -n "$WORK_DIR" ] && [ -n "$REVIEWER" ]; then
     echo "$code" > "$WORK_DIR/${REVIEWER}-exit.txt"
     if [ ! -f "$WORK_DIR/${REVIEWER}-output.md" ]; then
-      echo "invoke-litellm.sh: $reason" > "$WORK_DIR/${REVIEWER}-output.md"
+      echo "invoke-openai-compat: $reason" > "$WORK_DIR/${REVIEWER}-output.md"
     fi
   fi
 }
@@ -61,49 +65,57 @@ create_exit_file() {
 trap 'create_exit_file "$?" "unexpected exit"' EXIT
 
 if [ ! -d "$WORK_DIR" ]; then
-  echo "invoke-litellm.sh: work_dir does not exist: $WORK_DIR" >&2
+  echo "invoke-openai-compat: work_dir does not exist: $WORK_DIR" >&2
   exit 1
 fi
 
 if [ ! -f "$WORK_DIR/plan.md" ]; then
-  echo "invoke-litellm.sh: plan.md not found in $WORK_DIR" >&2
+  echo "invoke-openai-compat: plan.md not found in $WORK_DIR" >&2
   exit 1
 fi
 
 # --- Config ---
 
-CONFIG_FILE="$HOME/.claude/debate-litellm.json"
-
-BASE_URL="http://localhost:8200/v1"
-API_KEY=""
-CONFIG_MODEL=""
-CONFIG_TIMEOUT=""
-CONFIG_SYSTEM_PROMPT=""
-
-if [ -f "$CONFIG_FILE" ]; then
-  BASE_URL=$(jq -r '.base_url // "http://localhost:8200/v1"' "$CONFIG_FILE")
-  BASE_URL="${BASE_URL%/}"
-  API_KEY=$(jq -r '.api_key // ""' "$CONFIG_FILE")
-  CONFIG_MODEL=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].model // empty' "$CONFIG_FILE")
-  CONFIG_TIMEOUT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].timeout // empty' "$CONFIG_FILE")
-  CONFIG_SYSTEM_PROMPT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].system_prompt // empty' "$CONFIG_FILE")
-else
-  echo "invoke-litellm.sh: config not found at $CONFIG_FILE — using defaults" >&2
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "invoke-openai-compat: config not found: $CONFIG_FILE" >&2
+  exit 1
 fi
+
+BASE_URL=$(jq -r '.base_url // empty' "$CONFIG_FILE")
+if [ -z "$BASE_URL" ]; then
+  echo "invoke-openai-compat: base_url is required in $CONFIG_FILE" >&2
+  exit 1
+fi
+BASE_URL="${BASE_URL%/}"
+API_KEY=$(jq -r '.api_key // ""' "$CONFIG_FILE")
+CONFIG_MODEL=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].model // empty' "$CONFIG_FILE")
+CONFIG_TIMEOUT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].timeout // empty' "$CONFIG_FILE")
+CONFIG_SYSTEM_PROMPT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].system_prompt // empty' "$CONFIG_FILE")
 
 # Resolve: CLI arg > config > error/default
 MODEL="${MODEL_ARG:-${CONFIG_MODEL:-}}"
 if [ -z "$MODEL" ]; then
-  echo "invoke-litellm.sh: no model for '$REVIEWER' (pass as arg or set in config)" >&2
+  echo "invoke-openai-compat: no model for '$REVIEWER' (pass as arg or set in config)" >&2
   exit 1
 fi
 
 TIMEOUT="${TIMEOUT_ARG:-${CONFIG_TIMEOUT:-120}}"
 if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]] || [ "$TIMEOUT" -le 0 ]; then
-  echo "invoke-litellm.sh: invalid timeout '$TIMEOUT' for '$REVIEWER', using 120s" >&2
+  echo "invoke-openai-compat: invalid timeout '$TIMEOUT' for '$REVIEWER', using 120s" >&2
   TIMEOUT=120
 fi
-API_KEY="${API_KEY:-${LITELLM_API_KEY:-}}"
+# API key: config api_key > config api_key_env > deprecation check > empty
+if [ -z "$API_KEY" ]; then
+  API_KEY_ENV=$(jq -r '.api_key_env // empty' "$CONFIG_FILE")
+  if [ -n "$API_KEY_ENV" ]; then
+    API_KEY="${!API_KEY_ENV:-}"
+  fi
+fi
+
+if [ -z "$API_KEY" ] && [ -n "${LITELLM_API_KEY:-}" ]; then
+  echo "WARNING: LITELLM_API_KEY is set but not referenced in config." >&2
+  echo "  Add \"api_key_env\": \"LITELLM_API_KEY\" to $CONFIG_FILE" >&2
+fi
 
 # --- Prompt ---
 
@@ -161,13 +173,30 @@ fi
 
 # --- API call ---
 
-echo "[$REVIEWER] Submitting plan to $MODEL via LiteLLM (timeout: ${TIMEOUT}s)..." >&2
+echo "[$REVIEWER] Submitting plan to $MODEL via $BASE_URL (timeout: ${TIMEOUT}s)..." >&2
 
 CURL_ARGS=(
   -s -S
   --max-time "$TIMEOUT"
   -H "Content-Type: application/json"
 )
+
+# --- Extra headers from config ---
+HEADER_KEYS=$(jq -r '.headers // {} | keys[]' "$CONFIG_FILE" 2>/dev/null) || true
+while IFS= read -r hkey; do
+  [ -z "$hkey" ] && continue
+  hval=$(jq -r --arg k "$hkey" '.headers[$k]' "$CONFIG_FILE")
+  # Reject \r, \n, null bytes
+  if [[ "$hkey" == *$'\r'* ]] || [[ "$hkey" == *$'\n'* ]] || [[ "$hkey" == *$'\0'* ]]; then
+    echo "invoke-openai-compat: invalid header key containing control chars: '$hkey'" >&2
+    exit 1
+  fi
+  if [[ "$hval" == *$'\r'* ]] || [[ "$hval" == *$'\n'* ]] || [[ "$hval" == *$'\0'* ]]; then
+    echo "invoke-openai-compat: invalid header value for '$hkey' containing control chars" >&2
+    exit 1
+  fi
+  CURL_ARGS+=(-H "$hkey: $hval")
+done <<< "$HEADER_KEYS"
 
 if [ -n "$API_KEY" ]; then
   CURL_ARGS+=(-H "Authorization: Bearer $API_KEY")

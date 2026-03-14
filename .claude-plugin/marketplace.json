@@ -1,13 +1,13 @@
 {
   "name": "cc-debate",
-  "description": "Multi-model AI plan review with parallel execution, synthesis, and debate",
+  "description": "Multi-model AI plan review with parallel execution, synthesis, and debate — supports Codex, Gemini, OpenRouter, and LiteLLM",
   "owner": {
     "name": "strml"
   },
   "plugins": [
     {
       "name": "debate",
-      "description": "Multi-model AI plan review with parallel execution, synthesis, and debate",
+      "description": "Multi-model AI plan review with parallel execution, synthesis, and debate — supports Codex, Gemini, OpenRouter, and LiteLLM",
       "version": "1.2.0",
       "source": "./",
       "author": {

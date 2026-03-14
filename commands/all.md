@@ -26,7 +26,6 @@ which jq
 Build `AVAILABLE_REVIEWERS` from the results. Track CLI availability per reviewer for all modes:
 - `CODEX_CLI_AVAILABLE=true/false` — `which codex` succeeds
 - `GEMINI_CLI_AVAILABLE=true/false` — `which gemini` succeeds
-- `CLAUDE_CLI_AVAILABLE=true/false` — `which claude` succeeds (shell mode only)
 
 Display a prerequisite summary:
 
@@ -129,9 +128,9 @@ Check if the `TeamCreate` tool is available in this session. (`TeamCreate`, `Sen
 
 **If user passed `shell-mode`:** Set `EXEC_MODE=shell`. Skip to Step 2.
 
-**If `TeamCreate` is available:**
+**For team/agent mode (not shell):**
 
-In team/agent mode, Codex and Gemini reviewers **prefer the real CLI** when the binary is available and authenticated. The teammate agent calls the invoke script (`invoke-codex.sh` / `invoke-gemini.sh`) to get a genuine external review. If the CLI is unavailable, the reviewer falls back to a Claude persona that role-plays the review perspective — but this is a fallback, not the preferred path.
+Codex and Gemini reviewers **prefer the real CLI** when the binary is available and authenticated. The teammate agent calls the invoke script (`invoke-codex.sh` / `invoke-gemini.sh`) to get a genuine external review. If the CLI is unavailable, the reviewer falls back to a Claude persona that role-plays the review perspective — but this is a fallback, not the preferred path.
 
 Set `AVAILABLE_REVIEWERS = [codex, gemini, opus]` (all three, always) in team/agent mode.
 
@@ -140,7 +139,7 @@ Build `TEAM_REVIEWER_PLAN` based on CLI availability from Step 1a:
 - gemini → type: `cli` if `GEMINI_CLI_AVAILABLE`, else `persona` (The Architect)
 - claude → type: `persona` (The Skeptic) [always — Opus IS Claude]
 
-Display the reviewer plan:
+Display the reviewer plan (show `🔌 cli` for real CLI calls, `⚡ persona` for Claude agent perspective):
 
 ```text
 Reviewer plan (team mode):
@@ -149,16 +148,7 @@ Reviewer plan (team mode):
   ⚡ persona   opus    — The Skeptic (native Claude)
 ```
 
-Or if a CLI is missing:
-
-```text
-Reviewer plan (team mode):
-  ⚡ persona   codex   — The Executor (codex CLI not found — persona fallback)
-  🔌 cli       gemini  — Real Gemini CLI via invoke script
-  ⚡ persona   opus    — The Skeptic (native Claude)
-```
-
-Where `🔌 cli` = real external CLI call, `⚡ persona` = Claude agent reviewing from that perspective.
+**If `TeamCreate` is available:**
 
 Attempt to create the review team:
 
@@ -337,8 +327,8 @@ Content:
    prompt to <WORK_DIR>/<name>-prompt.txt that includes:
    1. What changed in the revision (read <WORK_DIR>/revisions.txt)
    2. A note to focus on whether the previous concerns were addressed
-   Then re-run the invoke script:
-   bash <SCRIPT_DIR>/invoke-<name>.sh "<WORK_DIR>" "<SESSION_ID>" "<MODEL>"
+   Then re-run the invoke script (use the captured session ID — CODEX_SESSION_ID or GEMINI_SESSION_UUID):
+   bash <SCRIPT_DIR>/invoke-<name>.sh "<WORK_DIR>" "<REVIEWER_SESSION_ID>" "<MODEL>"
    Read the exit code from <WORK_DIR>/<name>-exit.txt and report back.
    After the invoke script completes, delete <WORK_DIR>/<name>-prompt.txt to avoid
    stale prompts on subsequent rounds."
@@ -531,7 +521,7 @@ After each invoke call: check the exit code; on success read the reviewer's `*-o
 
 SendMessage the teammate with only a brief summary and the file path to read — not the raw content. Wait for the teammate's response message before proceeding. After the debate exchange completes, delete `<WORK_DIR>/<name>-prompt.txt` so subsequent invoke script calls use the default prompt instead of a stale debate prompt.
 
-**Agent mode:** For CLI-type reviewers, write the debate prompt to `<WORK_DIR>/<name>-prompt.txt` and spawn a fresh agent that calls the invoke script. For persona-type reviewers, spawn a fresh agent with full context injected via temp file (reviewer's prior output + other reviewer's position + debate question). Agent writes to `<name>-output.md` and exits.
+**Agent mode:** For CLI-type reviewers, write the debate prompt to `<WORK_DIR>/<name>-prompt.txt` and spawn a fresh agent that calls the invoke script. After the agent completes, delete `<WORK_DIR>/<name>-prompt.txt` to prevent stale prompts. For persona-type reviewers, spawn a fresh agent with full context injected via temp file (reviewer's prior output + other reviewer's position + debate question). Agent writes to `<name>-output.md` and exits.
 
 Display each debate exchange:
 

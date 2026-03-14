@@ -1,6 +1,6 @@
 ---
 description: Run AI reviewers in parallel via LiteLLM proxy, synthesize feedback, debate contradictions, and produce a consensus verdict. Supports any model available through LiteLLM. Configure reviewers in ~/.claude/debate-litellm.json.
-allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/run-parallel-litellm.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-litellm.sh:*), Bash(curl -s:*), Bash(rm -rf /private/tmp/claude/ai-review-:*), Write(/private/tmp/claude/ai-review-*)
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/run-parallel-openai-compat.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-openai-compat.sh:*), Bash(curl -s:*), Bash(rm -rf /private/tmp/claude/ai-review-:*), Write(/private/tmp/claude/ai-review-*)
 ---
 
 # AI Multi-Model Plan Review (LiteLLM)
@@ -84,7 +84,7 @@ If there is no plan in context, ask the user to paste it or describe what to rev
 Execute the parallel runner:
 
 ```bash
-bash "<SCRIPT_DIR>/run-parallel-litellm.sh" "<REVIEW_ID>" "<REVIEWER_LIST>"
+bash "<SCRIPT_DIR>/run-parallel-openai-compat.sh" "~/.claude/debate-litellm.json" "<REVIEW_ID>" "<REVIEWER_LIST>"
 ```
 
 Where `<REVIEWER_LIST>` is the comma-separated list of reviewer names (or omitted for all).
@@ -172,7 +172,7 @@ DEBATE_EOF
 Then invoke each debating reviewer:
 
 ```bash
-bash "<SCRIPT_DIR>/invoke-litellm.sh" "<WORK_DIR>" "<name>"
+bash "<SCRIPT_DIR>/invoke-openai-compat.sh" "~/.claude/debate-litellm.json" "<WORK_DIR>" "<name>"
 ```
 
 (No model/timeout args needed — they're read from config.)

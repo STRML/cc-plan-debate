@@ -137,7 +137,7 @@ Set `AVAILABLE_REVIEWERS = [codex, gemini, opus]` (all three, always) in team/ag
 Build `TEAM_REVIEWER_PLAN` based on CLI availability from Step 1a:
 - codex → type: `cli` if `CODEX_CLI_AVAILABLE`, else `persona` (The Executor)
 - gemini → type: `cli` if `GEMINI_CLI_AVAILABLE`, else `persona` (The Architect)
-- claude → type: `persona` (The Skeptic) [always — Opus IS Claude]
+- opus → type: `persona` (The Skeptic) [always — Opus IS Claude]
 
 Display the reviewer plan (show `🔌 cli` for real CLI calls, `⚡ persona` for Claude agent perspective):
 

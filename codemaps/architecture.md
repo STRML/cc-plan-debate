@@ -3,12 +3,12 @@ _Updated: 2026-03-01_
 
 ## Overview
 
-`cc-plan-debate` is a Claude Code plugin that sends implementation plans to multiple AI models for parallel review. It synthesizes feedback, resolves contradictions via targeted debate, and produces a consensus verdict before code is written.
+`cc-debate` is a Claude Code plugin that sends implementation plans to multiple AI models for parallel review. It synthesizes feedback, resolves contradictions via targeted debate, and produces a consensus verdict before code is written.
 
 ## Top-level Layout
 
 ```
-cc-plan-debate/
+cc-debate/
 ├── .claude-plugin/         # Plugin metadata (marketplace.json, plugin.json)
 ├── commands/               # Claude Code slash commands (*.md skill files)
 ├── reviewers/              # Reviewer definitions (persona, invocation, output contract)

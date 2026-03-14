@@ -13,8 +13,8 @@ Two modes of operation:
 
 ```bash
 # Install
-/plugin marketplace add STRML/cc-plan-debate
-/plugin install debate@cc-plan-debate
+/plugin marketplace add STRML/cc-debate
+/plugin install debate@cc-debate
 
 # Check prerequisites
 /debate:setup
@@ -27,8 +27,8 @@ Two modes of operation:
 
 ```bash
 # Install
-/plugin marketplace add STRML/cc-plan-debate
-/plugin install debate@cc-plan-debate
+/plugin marketplace add STRML/cc-debate
+/plugin install debate@cc-debate
 
 # Check prerequisites (verifies proxy connectivity + config)
 /debate:litellm-setup
@@ -105,16 +105,16 @@ Claude: Sending revised plan back to all reviewers...
 ### From GitHub
 
 ```
-/plugin marketplace add STRML/cc-plan-debate
-/plugin install debate@cc-plan-debate
+/plugin marketplace add STRML/cc-debate
+/plugin install debate@cc-debate
 ```
 
 ### Local dev
 
 ```bash
-git clone https://github.com/STRML/cc-plan-debate ~/debate-plugin
+git clone https://github.com/STRML/cc-debate ~/debate-plugin
 /plugin marketplace add ~/debate-plugin
-/plugin install debate@debate-dev
+/plugin install debate@cc-debate
 ```
 
 Restart Claude Code after installing.

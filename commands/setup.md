@@ -1,6 +1,6 @@
 ---
 description: Check debate plugin prerequisites, verify reviewers are installed and authenticated, and print the exact settings.json snippet for fully unattended (no-prompt) operation.
-allowed-tools: Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(command -v:*), Bash(codex --version:*), Bash(claude --version:*), Bash(timeout 30 gemini:*), Bash(grep -q:*), Bash(jq -e:*), Bash(jq:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/probe-model.sh:*), Bash(bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/create-links.sh:*)
+allowed-tools: Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(command -v:*), Bash(codex --version:*), Bash(claude --version:*), Bash(timeout 30 gemini:*), Bash(grep -q:*), Bash(jq -e:*), Bash(jq:*), Bash(bash ~/.claude/plugins/cache/cc-debate/debate/*/scripts/probe-model.sh:*), Bash(bash ~/.claude/plugins/cache/cc-debate/debate/*/scripts/create-links.sh:*)
 ---
 
 # debate — Setup & Permission Check
@@ -141,7 +141,7 @@ Report:
 Probe which model tiers are accessible for each reviewer. Results are cached 24 hours in `~/.claude/debate-model-probe.json`.
 
 ```bash
-bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/probe-model.sh codex
+bash ~/.claude/plugins/cache/cc-debate/debate/*/scripts/probe-model.sh codex
 ```
 
 Report:
@@ -150,7 +150,7 @@ Report:
 - Exit 1 → `❌ codex: no model accessible — check API key and subscription`
 
 ```bash
-bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/probe-model.sh gemini
+bash ~/.claude/plugins/cache/cc-debate/debate/*/scripts/probe-model.sh gemini
 ```
 
 Report:
@@ -217,7 +217,7 @@ Create `~/.claude/debate-scripts` pointing to the installed version's scripts di
 This symlink lets the main debate commands invoke scripts without version interpolation.
 
 ```bash
-bash ~/.claude/plugins/cache/debate-dev/debate/*/scripts/create-links.sh
+bash ~/.claude/plugins/cache/cc-debate/debate/*/scripts/create-links.sh
 ```
 
 Report:

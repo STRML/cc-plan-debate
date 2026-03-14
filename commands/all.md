@@ -23,7 +23,9 @@ which claude
 which jq
 ```
 
-Build `AVAILABLE_REVIEWERS` from the results for **shell mode only**. In team/agent mode, all three reviewers always run as native teammate personas regardless of binary availability — binary presence only matters for shell mode.
+Build `AVAILABLE_REVIEWERS` from the results. Track CLI availability per reviewer for all modes:
+- `CODEX_CLI_AVAILABLE=true/false` — `which codex` succeeds
+- `GEMINI_CLI_AVAILABLE=true/false` — `which gemini` succeeds
 
 Display a prerequisite summary:
 
@@ -31,8 +33,8 @@ Display a prerequisite summary:
 ## AI Review — Prerequisite Check
 
 Reviewers found:
-  ✅ codex    (OpenAI Codex — shell mode CLI)
-  ✅ gemini   (Google Gemini — shell mode CLI)
+  ✅ codex    (OpenAI Codex CLI)
+  ✅ gemini   (Google Gemini CLI)
   ✅ claude   (Anthropic Claude Opus)
 
 Reviewers missing:
@@ -40,12 +42,9 @@ Reviewers missing:
 
 Tools:
   ✅ jq       (shell mode only — for Opus CLI output parsing)
-
-Note: In team/agent mode, all three reviewers run as native teammate personas
-      regardless of CLI availability (Codex/Gemini CLIs are shell mode only).
 ```
 
-If a reviewer binary is missing, show how to install it (relevant for shell mode):
+If a reviewer binary is missing, show how to install it:
 
 | Reviewer | Install Command |
 |----------|----------------|
@@ -55,17 +54,17 @@ If a reviewer binary is missing, show how to install it (relevant for shell mode
 
 If `jq` is missing and `claude` is available, note:
 In shell mode (`EXEC_MODE=shell`), `jq` is required for Claude output parsing — install: `brew install jq` (macOS) / `apt install jq` (Linux). Skip Claude reviewer in shell mode until jq is installed.
-In team/agent mode, all reviewers run natively and jq is not required.
+In team/agent mode, Opus runs natively and jq is not required.
 
-If Gemini CLI is available and shell mode is being considered, verify it is authenticated:
+If Gemini CLI is available, verify it is authenticated:
 
 ```bash
 echo "reply with only the word PONG" | timeout 30 gemini -p "Reply with only the word PONG." -s -e "" 2>/dev/null
 ```
 
-If output does not contain "PONG" (case-insensitive), warn: `Gemini is not authenticated — run: gemini auth`
+If output does not contain "PONG" (case-insensitive), set `GEMINI_CLI_AVAILABLE=false` and warn: `Gemini CLI found but not authenticated — run: gemini auth (will use persona fallback)`
 
-**If NO reviewers are available AND shell-mode was requested**, stop and display the full install guide, then exit. In team/agent mode, reviews always proceed (all 3 teammate personas are always available).
+**If NO reviewers are available AND shell-mode was requested**, stop and display the full install guide, then exit. In team/agent mode, reviews always proceed — Codex/Gemini use persona fallback if CLIs are unavailable, and Opus always runs natively.
 
 **If fewer than 2 reviewers are available**, note which is missing and proceed with the single available reviewer. Skip Step 5 (debate) entirely when only 1 reviewer runs — debate requires at least 2 reviewers.
 
@@ -129,27 +128,27 @@ Check if the `TeamCreate` tool is available in this session. (`TeamCreate`, `Sen
 
 **If user passed `shell-mode`:** Set `EXEC_MODE=shell`. Skip to Step 2.
 
-**If `TeamCreate` is available:**
+**For team/agent mode (not shell):**
 
-In team/agent mode, **all reviewers always run as native Claude teammate personas** regardless of CLI binary availability. CLI tools (codex, gemini) run inside subagent processes where the macOS sandbox restricts system calls (Codex: `SCDynamicStoreCreate` panic) and outbound network (Gemini: HTTPS blocked). Using teammate personas avoids both failure modes and delivers equivalent review quality.
+Codex and Gemini reviewers **prefer the real CLI** when the binary is available and authenticated. The teammate agent calls the invoke script (`invoke-codex.sh` / `invoke-gemini.sh`) to get a genuine external review. If the CLI is unavailable, the reviewer falls back to a Claude persona that role-plays the review perspective — but this is a fallback, not the preferred path.
 
 Set `AVAILABLE_REVIEWERS = [codex, gemini, opus]` (all three, always) in team/agent mode.
 
-Build `TEAM_REVIEWER_PLAN`:
-- codex → type: `teammate` (The Executor persona) [always in team/agent mode]
-- gemini → type: `teammate` (The Architect persona) [always in team/agent mode]
-- claude → type: `teammate` (The Skeptic persona) [always in team/agent mode]
+Build `TEAM_REVIEWER_PLAN` based on CLI availability from Step 1a:
+- codex → type: `cli` if `CODEX_CLI_AVAILABLE`, else `persona` (The Executor)
+- gemini → type: `cli` if `GEMINI_CLI_AVAILABLE`, else `persona` (The Architect)
+- claude → type: `persona` (The Skeptic) [always — Opus IS Claude]
 
-Display the reviewer plan:
+Display the reviewer plan (show `🔌 cli` for real CLI calls, `⚡ persona` for Claude agent perspective):
 
 ```text
 Reviewer plan (team mode):
-  ⚡ teammate  codex   — The Executor
-  ⚡ teammate  gemini  — The Architect
-  ⚡ teammate  opus    — The Skeptic
+  🔌 cli       codex   — Real Codex CLI via invoke script
+  🔌 cli       gemini  — Real Gemini CLI via invoke script
+  ⚡ persona   opus    — The Skeptic (native Claude)
 ```
 
-Where `⚡ teammate` indicates a native Claude agent reviewer. All reviewers are `⚡ teammate` in team/agent mode — CLI subprocesses are not used.
+**If `TeamCreate` is available:**
 
 Attempt to create the review team:
 
@@ -188,13 +187,40 @@ The review team was created in Step 1e and persists for the full session. Do NOT
 
 For each reviewer in `TEAM_REVIEWER_PLAN`, use the Agent tool with `team_name: "debate-<REVIEW_ID>"` and the explicit `name` below. Spawn all in parallel.
 
-All reviewers in team/agent mode are teammate-type (native Claude agents). There are no CLI-type reviewers in team/agent mode.
+Use the prompt variant matching each reviewer's type from `TEAM_REVIEWER_PLAN`.
 
-**The Executor persona (Codex reviewer):**
+**Codex reviewer — CLI type** (when `CODEX_CLI_AVAILABLE`):
 
 Agent `name`: `codex-reviewer`
 ```
-You are The Executor — a pragmatic runtime tracer. Find what will actually break at runtime.
+Your job is to get a REAL review from the OpenAI Codex CLI. Do NOT write the review yourself.
+Do NOT role-play or emulate Codex. You MUST call the actual CLI binary.
+
+Step 1: Run the Codex invoke script:
+  bash <SCRIPT_DIR>/invoke-codex.sh "<WORK_DIR>" "" "<CODEX_MODEL>"
+
+  Use timeout: 180000 on the Bash call.
+
+Step 2: Read <WORK_DIR>/codex-exit.txt for the exit code.
+  - If "0": Read <WORK_DIR>/codex-output.md — this is the REAL Codex review.
+    Message me: "Codex complete. Exit: 0"
+  - If non-zero (77 sandbox panic, 124 timeout, or other failure):
+    Fall back to persona mode. Read the plan at <WORK_DIR>/plan.md and write your
+    own review as The Executor — a pragmatic runtime tracer. Focus on shell correctness,
+    exit code handling, race conditions, file I/O, command availability.
+    Write your review to <WORK_DIR>/codex-output.md. End with VERDICT: APPROVED or VERDICT: REVISE.
+    Write "0" to <WORK_DIR>/codex-exit.txt.
+    Message me: "Codex complete (CLI failed, persona fallback). Exit: 0"
+
+Wait for further instructions — you may be asked to debate or re-review.
+```
+
+**Codex reviewer — persona fallback** (when NOT `CODEX_CLI_AVAILABLE`):
+
+Agent `name`: `codex-reviewer`
+```
+You are The Executor — a pragmatic runtime tracer. The Codex CLI is not installed,
+so you are providing this review as a Claude persona. Find what will actually break at runtime.
 
 Focus: shell correctness, exit code handling, race conditions, file I/O, command availability,
 error propagation, missing dependencies, timing assumptions.
@@ -207,15 +233,43 @@ the exact step or command that will fail and why. End your review with either:
   VERDICT: REVISE
 
 Then write "0" to <WORK_DIR>/codex-exit.txt.
-Send me (the team lead) a message: "Codex complete. Exit: 0"
+Send me (the team lead) a message: "Codex complete (persona). Exit: 0"
 Wait for further instructions — you may be asked to debate or re-review.
 ```
 
-**The Architect persona (Gemini reviewer):**
+**Gemini reviewer — CLI type** (when `GEMINI_CLI_AVAILABLE`):
+
+Agent `name`: `gemini-reviewer`
+```
+Your job is to get a REAL review from the Google Gemini CLI. Do NOT write the review yourself.
+Do NOT role-play or emulate Gemini. You MUST call the actual CLI binary.
+
+Step 1: Run the Gemini invoke script:
+  bash <SCRIPT_DIR>/invoke-gemini.sh "<WORK_DIR>" "" "<GEMINI_MODEL>"
+
+  Use timeout: 300000 on the Bash call.
+
+Step 2: Read <WORK_DIR>/gemini-exit.txt for the exit code.
+  - If "0": Read <WORK_DIR>/gemini-output.md — this is the REAL Gemini review.
+    Message me: "Gemini complete. Exit: 0"
+  - If non-zero (124 timeout or other failure):
+    Fall back to persona mode. Read the plan at <WORK_DIR>/plan.md and write your
+    own review as The Architect — a systems architect reviewing for structural integrity.
+    Focus on approach validity, over-engineering, missing phases, graceful degradation.
+    Write your review to <WORK_DIR>/gemini-output.md. End with VERDICT: APPROVED or VERDICT: REVISE.
+    Write "0" to <WORK_DIR>/gemini-exit.txt.
+    Message me: "Gemini complete (CLI failed, persona fallback). Exit: 0"
+
+Wait for further instructions — you may be asked to debate or re-review.
+```
+
+**Gemini reviewer — persona fallback** (when NOT `GEMINI_CLI_AVAILABLE`):
 
 Agent `name`: `gemini-reviewer`
 ```
 You are The Architect — a systems architect reviewing for structural integrity.
+The Gemini CLI is not installed or not authenticated, so you are providing this review
+as a Claude persona.
 
 Focus: approach validity, over-engineering, missing phases, graceful degradation,
 better alternatives, scalability risks, cross-cutting concerns.
@@ -228,11 +282,11 @@ or design decision that is structurally flawed. End your review with either:
   VERDICT: REVISE
 
 Then write "0" to <WORK_DIR>/gemini-exit.txt.
-Send me (the team lead) a message: "Gemini complete. Exit: 0"
+Send me (the team lead) a message: "Gemini complete (persona). Exit: 0"
 Wait for further instructions — you may be asked to debate or re-review.
 ```
 
-**The Skeptic persona (Opus reviewer):**
+**The Skeptic (Opus reviewer)** — always persona (Opus IS Claude):
 
 Agent `name`: `opus-reviewer`
 ```
@@ -264,10 +318,26 @@ If an agent fails to report within 360s, treat that reviewer as timed-out (exit 
 
 **Round 2+ — Message existing teammates (do NOT spawn new agents):**
 
-For each reviewer that succeeded in the previous round, send a `SendMessage`:
+For CLI-type reviewers (codex/gemini with CLI available), send:
 
 ```
-Recipient: "<reviewer-name>"  (e.g. "codex-reviewer", "gemini-reviewer", "opus-reviewer")
+Recipient: "<reviewer-name>"
+Content:
+  "The plan has been revised. Before re-running the invoke script, write a revision-aware
+   prompt to <WORK_DIR>/<name>-prompt.txt that includes:
+   1. What changed in the revision (read <WORK_DIR>/revisions.txt)
+   2. A note to focus on whether the previous concerns were addressed
+   Then re-run the invoke script (use the captured session ID — CODEX_SESSION_ID or GEMINI_SESSION_UUID):
+   bash <SCRIPT_DIR>/invoke-<name>.sh "<WORK_DIR>" "<REVIEWER_SESSION_ID>" "<MODEL>"
+   Read the exit code from <WORK_DIR>/<name>-exit.txt and report back.
+   After the invoke script completes, delete <WORK_DIR>/<name>-prompt.txt to avoid
+   stale prompts on subsequent rounds."
+```
+
+For persona-type reviewers (opus, or codex/gemini without CLI), send:
+
+```
+Recipient: "<reviewer-name>"
 Content:
   "The plan has been revised. Re-read <WORK_DIR>/plan.md (file has been updated).
    Write your updated review to <WORK_DIR>/<name>-output.md, overwriting the previous.
@@ -281,9 +351,24 @@ Content:
 
 **Every round:** Spawn reviewer agents using the Agent tool with `run_in_background: true`.
 
-**Round 1 prompt** (same personas as Option B teammate-type, above).
+**Round 1 prompt** — use the same CLI-first / persona-fallback prompts as Option B, matching each reviewer's type from `TEAM_REVIEWER_PLAN`.
 
-**Round 2+ prompt** — write context to a temp file first, then pass file path to agent:
+**Round 2+ prompt — CLI-type reviewers:** Write a revision-aware prompt to `<WORK_DIR>/<name>-prompt.txt`, then spawn an agent whose job is to call the invoke script:
+
+```bash
+# Write revision-aware prompt for the CLI to use
+cat > <WORK_DIR>/<name>-prompt.txt << 'EOF'
+The plan has been revised. Here is what changed:
+[content of <WORK_DIR>/revisions.txt]
+
+Re-review the updated plan. Focus on whether the previous concerns were addressed.
+End with VERDICT: APPROVED or VERDICT: REVISE.
+EOF
+```
+
+Spawn a fresh agent with prompt: "Run `bash <SCRIPT_DIR>/invoke-<name>.sh "<WORK_DIR>" "<REVIEWER_SESSION_ID>" "<MODEL>"` (use timeout: 300000). Read `<WORK_DIR>/<name>-exit.txt` for the exit code. If non-zero, fall back to persona review. After completion, delete `<WORK_DIR>/<name>-prompt.txt`."
+
+**Round 2+ prompt — persona-type reviewers:** Write context to a temp file first, then pass file path to agent:
 
 ```bash
 # Write injected context to file — never interpolate review content into prompt strings
@@ -437,7 +522,31 @@ bash "<SCRIPT_DIR>/invoke-opus.sh" "<WORK_DIR>" "<OPUS_SESSION_ID>" "<OPUS_MODEL
 
 After each invoke call: check the exit code; on success read the reviewer's `*-output.md` and updated `*-session-id.txt`. If a session resume fails, skip that reviewer's debate response and note it.
 
-**Team mode — all reviewers are teammate-type:** Send a `SendMessage` directly. Do NOT spawn fresh agents. The reviewer already has its full conversation history. Write the debate prompt to a file and have the reviewer read the output files itself — never include raw reviewer output in the SendMessage content:
+**Team mode — CLI-type reviewers:** Write the debate prompt to `<WORK_DIR>/<name>-prompt.txt`, then SendMessage the teammate with explicit instructions to re-run the invoke script:
+
+```bash
+{
+  echo "There is a disagreement on [topic]."
+  echo "The other reviewer's position is in: <WORK_DIR>/<other>-output.md"
+  echo "Your position is in: <WORK_DIR>/<name>-output.md"
+  echo "Read both files. Do you stand by your position, or does their point change your assessment?"
+} > <WORK_DIR>/<name>-prompt.txt
+```
+
+```
+SendMessage:
+  Recipient: "<reviewer-name>"
+  Content:
+    "A debate prompt has been written to <WORK_DIR>/<name>-prompt.txt.
+     Re-run the invoke script to get the CLI's debate response:
+     bash <SCRIPT_DIR>/invoke-<name>.sh "<WORK_DIR>" "<REVIEWER_SESSION_ID>" "<MODEL>"
+     Read <WORK_DIR>/<name>-exit.txt for the exit code. Report back.
+     After completion, delete <WORK_DIR>/<name>-prompt.txt."
+```
+
+Wait for the teammate's response. After the debate exchange completes, verify `<WORK_DIR>/<name>-prompt.txt` was deleted (delete it yourself if the teammate didn't).
+
+**Team mode — persona-type reviewers:** Write the debate prompt to a file and have the reviewer read the output files itself — never include raw reviewer output in the SendMessage content:
 
 ```bash
 {
@@ -446,12 +555,12 @@ After each invoke call: check the exit code; on success read the reviewer's `*-o
   echo "Your position is in: <WORK_DIR>/<name>-output.md"
   echo "Read both files. Do you stand by your position, or does their point change your assessment?"
   echo "Write your response to <WORK_DIR>/<name>-output.md. Then message me: '<Name> debate complete.'"
-} > <WORK_DIR>/<name>-debate-prompt.txt
+} > <WORK_DIR>/<name>-debate-instructions.txt
 ```
 
 SendMessage the teammate with only a brief summary and the file path to read — not the raw content. Wait for the teammate's response message before proceeding.
 
-**Agent mode — all reviewers are teammate-type:** Spawn a fresh agent with full context injected via temp file (reviewer's prior output + other reviewer's position + debate question). Agent writes to `<name>-output.md` and exits.
+**Agent mode:** For CLI-type reviewers, write the debate prompt to `<WORK_DIR>/<name>-prompt.txt` and spawn a fresh agent that calls the invoke script. After the agent completes, delete `<WORK_DIR>/<name>-prompt.txt` to prevent stale prompts. For persona-type reviewers, spawn a fresh agent with full context injected via temp file (reviewer's prior output + other reviewer's position + debate question). Agent writes to `<name>-output.md` and exits.
 
 Display each debate exchange:
 
@@ -570,7 +679,7 @@ If any step failed before reaching this step, still run both cleanup steps (Team
 - **Graceful degradation:** If only 1 reviewer is available, run the full flow and skip the debate phase
 - **All-fail handling:** If all reviewers fail/timeout, return `UNDECIDED` with retry guidance
 - **Session tracking:** Always recapture session IDs from `*-session-id.txt` after each invoke script call — stale IDs cause silent failures on next resume; each script handles fallback internally
-- **CLI reviewers (shell mode only):** Codex and Gemini CLIs are only used in shell mode (`EXEC_MODE=shell`). In team/agent mode, all reviewers run as native teammate personas. CLI subprocesses inside subagent environments trigger macOS sandbox restrictions (Codex: `SCDynamicStoreCreate` panic; Gemini: outbound HTTPS blocked) that `excludedCommands` cannot reliably prevent.
+- **CLI-preferred reviewers:** In all modes, Codex and Gemini teammates prefer calling the real CLI binary via invoke scripts when the CLI is available and authenticated. If the CLI is unavailable, they fall back to persona-based review (Claude role-playing that perspective). Sandbox restrictions (Codex: `SCDynamicStoreCreate` panic; Gemini: outbound HTTPS blocked) may cause CLI calls to fail from subagent processes — configure `sandbox.excludedCommands` as shown by `/debate:setup`, or accept persona fallback.
 - **Opus session ID (shell mode only):** Read `OPUS_SESSION_ID` from `opus-session-id.txt` (written by invoke-opus.sh); script guards `--resume` with `[ -n "$OPUS_SESSION_ID" ]` internally. Not applicable in team/agent mode.
 - **Opus nested sessions (shell mode only):** `invoke-opus.sh` handles `unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT` and `CLAUDE_CODE_SIMPLE=1` internally. Not needed in team/agent mode where all reviewers are native teammates.
 - **jq dependency (shell mode only):** Skip Claude reviewer in shell mode if `jq` is not installed; show install guidance. In team/agent mode, all reviewers run natively — jq is not required.

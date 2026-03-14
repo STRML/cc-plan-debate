@@ -159,7 +159,7 @@ Report:
 
 ## Step 3e2: Check sandbox network and filesystem allowlists
 
-The debate plugin calls `api.anthropic.com` (for Claude Opus) and `http-intake.logs.us5.datadoghq.com` (Datadog telemetry). The work directory `/tmp/claude/ai-review-*` must also be readable and editable inside the sandbox.
+The debate plugin calls `api.anthropic.com` (for Claude Opus) and `http-intake.logs.us5.datadoghq.com` (Datadog telemetry). The work directory `/private/tmp/claude/ai-review-*` must also be readable and editable inside the sandbox.
 
 **Network — check for `api.anthropic.com` in `sandbox.network.allowedHosts`:**
 
@@ -182,13 +182,13 @@ Report:
 **Filesystem — check for Read/Edit permissions on work dir:**
 
 ```bash
-jq -e '.permissions.allow | index("Read(/tmp/claude/ai-review*)") != null' "$HOME/.claude/settings.json" > /dev/null 2>&1
-jq -e '.permissions.allow | index("Edit(/tmp/claude/ai-review*)") != null' "$HOME/.claude/settings.json" > /dev/null 2>&1
+jq -e '.permissions.allow | index("Read(/private/tmp/claude/ai-review*)") != null' "$HOME/.claude/settings.json" > /dev/null 2>&1
+jq -e '.permissions.allow | index("Edit(/private/tmp/claude/ai-review*)") != null' "$HOME/.claude/settings.json" > /dev/null 2>&1
 ```
 
 Report:
-- Both exit 0 → `✅ sandbox: /tmp/claude/ai-review* read+edit allowed`
-- Any non-zero → `❌ sandbox: /tmp/claude/ai-review* missing read or edit permission — add to permissions.allow`
+- Both exit 0 → `✅ sandbox: /private/tmp/claude/ai-review* read+edit allowed`
+- Any non-zero → `❌ sandbox: /private/tmp/claude/ai-review* missing read or edit permission — add to permissions.allow`
 
 If anything is missing, show this snippet to add to `~/.claude/settings.json`:
 
@@ -204,8 +204,8 @@ If anything is missing, show this snippet to add to `~/.claude/settings.json`:
   },
   "permissions": {
     "allow": [
-      "Read(/tmp/claude/ai-review*)",
-      "Edit(/tmp/claude/ai-review*)"
+      "Read(/private/tmp/claude/ai-review*)",
+      "Edit(/private/tmp/claude/ai-review*)"
     ]
   }
 }
@@ -259,9 +259,9 @@ without any approval prompts, add the following to ~/.claude/settings.json:
       "Bash(which gemini:*)",
       "Bash(which claude:*)",
       "Bash(which jq:*)",
-      "Read(/tmp/claude/ai-review*)",
-      "Edit(/tmp/claude/ai-review*)",
-      "Bash(rm -rf /tmp/claude/ai-review-:*)",
+      "Read(/private/tmp/claude/ai-review*)",
+      "Edit(/private/tmp/claude/ai-review*)",
+      "Bash(rm -rf /private/tmp/claude/ai-review-:*)",
       "Bash(codex exec -m:*)",
       "Bash(codex exec resume:*)",
       "Bash(gemini -p:*)",

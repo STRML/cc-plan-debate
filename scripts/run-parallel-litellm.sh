@@ -4,7 +4,7 @@
 # invoke-litellm.sh for each, and polls for completion.
 #
 # Usage: run-parallel-litellm.sh <REVIEW_ID> [reviewer1,reviewer2,...]
-#   REVIEW_ID  — 8-char hex ID (work dir: /tmp/claude/ai-review-<ID>)
+#   REVIEW_ID  — 8-char hex ID (work dir: /private/tmp/claude/ai-review-<ID>)
 #   reviewers  — optional comma-separated list; defaults to all from config
 
 REVIEW_ID="$1"
@@ -21,7 +21,7 @@ if ! [[ "$REVIEW_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   exit 1
 fi
 
-WORK_DIR="/tmp/claude/ai-review-${REVIEW_ID}"
+WORK_DIR="/private/tmp/claude/ai-review-${REVIEW_ID}"
 CONFIG_FILE="$HOME/.claude/debate-litellm.json"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 

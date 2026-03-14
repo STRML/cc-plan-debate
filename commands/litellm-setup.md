@@ -135,10 +135,10 @@ To run /debate:litellm-review without approval prompts, add to ~/.claude/setting
       "Bash(bash ~/.claude/debate-scripts/run-parallel-litellm.sh:*)",
       "Bash(bash ~/.claude/debate-scripts/invoke-litellm.sh:*)",
       "Bash(curl -s:*)",
-      "Bash(rm -rf /tmp/claude/ai-review-:*)",
-      "Read(/tmp/claude/ai-review*)",
-      "Edit(/tmp/claude/ai-review*)",
-      "Write(/tmp/claude/ai-review*)"
+      "Bash(rm -rf /private/tmp/claude/ai-review-:*)",
+      "Read(/private/tmp/claude/ai-review*)",
+      "Edit(/private/tmp/claude/ai-review*)",
+      "Write(/private/tmp/claude/ai-review*)"
     ]
   }
 }

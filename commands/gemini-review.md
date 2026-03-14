@@ -1,6 +1,6 @@
 ---
 description: Send the current plan to Google Gemini CLI for iterative review. Claude and Gemini go back-and-forth until Gemini approves or max 5 rounds reached.
-allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-gemini.sh:*), Bash(rm -rf /tmp/claude/ai-review-:*), Bash(which gemini:*), Bash(gemini -s:*)
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-gemini.sh:*), Bash(rm -rf /private/tmp/claude/ai-review-:*), Bash(which gemini:*), Bash(gemini -s:*)
 ---
 
 # Gemini Plan Review (Iterative)
@@ -61,11 +61,11 @@ bash ~/.claude/debate-scripts/debate-setup.sh
 
 Use `SCRIPT_DIR` for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan.md`, `gemini-output.md`, `gemini-session-id.txt`, `gemini-exit.txt`
 
-**Cleanup:** If any step fails or the user interrupts, always run `rm -rf /tmp/claude/ai-review-${REVIEW_ID}` before stopping.
+**Cleanup:** If any step fails or the user interrupts, always run `rm -rf /private/tmp/claude/ai-review-${REVIEW_ID}` before stopping.
 
 ## Step 2: Capture the Plan
 
-1. Write the full plan content to `/tmp/claude/ai-review-${REVIEW_ID}/plan.md`
+1. Write the full plan content to `/private/tmp/claude/ai-review-${REVIEW_ID}/plan.md`
 2. If there is no plan in the current context, ask the user what they want reviewed
 
 ## Step 3: Initial Review (Round 1)
@@ -83,7 +83,7 @@ The script writes the review to `gemini-output.md` and the session UUID to `gemi
 
 ## Step 4: Read Review & Check Verdict
 
-1. Read `/tmp/claude/ai-review-${REVIEW_ID}/gemini-output.md`
+1. Read `/private/tmp/claude/ai-review-${REVIEW_ID}/gemini-output.md`
 2. Present Gemini's review:
 
 ```text
@@ -102,11 +102,11 @@ The script writes the review to `gemini-output.md` and the session UUID to `gemi
 
 Based on Gemini's feedback:
 
-1. **Revise the plan** — address each issue Gemini raised. Update the plan content in the conversation context and rewrite `/tmp/claude/ai-review-${REVIEW_ID}/plan.md` with the revised version.
+1. **Revise the plan** — address each issue Gemini raised. Update the plan content in the conversation context and rewrite `/private/tmp/claude/ai-review-${REVIEW_ID}/plan.md` with the revised version.
 2. **Write the revision summary to a file** (never compose this inline in a shell string):
 
 ```bash
-cat > /tmp/claude/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
+cat > /private/tmp/claude/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
 [Write the revision bullets here before closing the heredoc]
 EOF
 ```
@@ -129,11 +129,11 @@ Write the resume prompt, then call the script — it handles resume vs fresh-fal
   echo "I've revised the plan based on your feedback. The updated plan is provided via stdin."
   echo ""
   echo "Here's what I changed:"
-  cat /tmp/claude/ai-review-${REVIEW_ID}/revisions.txt
+  cat /private/tmp/claude/ai-review-${REVIEW_ID}/revisions.txt
   echo ""
   echo "Please re-review the updated plan. If it is now solid and ready to implement, end with: VERDICT: APPROVED"
   echo "If more changes are needed, end with: VERDICT: REVISE"
-} > /tmp/claude/ai-review-${REVIEW_ID}/gemini-prompt.txt
+} > /private/tmp/claude/ai-review-${REVIEW_ID}/gemini-prompt.txt
 
 bash "<SCRIPT_DIR>/invoke-gemini.sh" \
   "<WORK_DIR>" "<GEMINI_SESSION_UUID>" "<MODEL>"
@@ -178,7 +178,7 @@ Then display the final plan so it persists in the conversation context after cle
 ---
 ## Final Plan
 
-[full content of /tmp/claude/ai-review-${REVIEW_ID}/plan.md]
+[full content of /private/tmp/claude/ai-review-${REVIEW_ID}/plan.md]
 
 ---
 Review complete. Clear context and implement this plan, or save it elsewhere first.
@@ -187,7 +187,7 @@ Review complete. Clear context and implement this plan, or save it elsewhere fir
 ## Step 8: Cleanup
 
 ```bash
-rm -rf /tmp/claude/ai-review-${REVIEW_ID}
+rm -rf /private/tmp/claude/ai-review-${REVIEW_ID}
 ```
 
 ## Loop Summary

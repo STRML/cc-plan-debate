@@ -58,8 +58,8 @@ fi
 FOUND_MODEL=""
 
 for MODEL in "${MODELS[@]}"; do
-  PROBE_TMP=$(mktemp /tmp/claude/probe-XXXXXX.txt 2>/dev/null || mktemp)
-  PROBE_ERR=$(mktemp /tmp/claude/probe-XXXXXX.err 2>/dev/null || mktemp)
+  PROBE_TMP=$(mktemp /private/tmp/claude/probe-XXXXXX.txt 2>/dev/null || mktemp)
+  PROBE_ERR=$(mktemp /private/tmp/claude/probe-XXXXXX.err 2>/dev/null || mktemp)
   PROBE_EXIT=0
 
   if [ "$REVIEWER" = "codex" ]; then

@@ -3,7 +3,7 @@ _Updated: 2026-03-01_
 
 ## Temp Work Directory
 
-Created per review session at `/tmp/claude/ai-review-<REVIEW_ID>/` (8-char hex ID).
+Created per review session at `/private/tmp/claude/ai-review-<REVIEW_ID>/` (8-char hex ID).
 
 ```
 ai-review-<REVIEW_ID>/
@@ -29,7 +29,7 @@ ai-review-<REVIEW_ID>/
 └── opus-prompt.txt          # Debate/resume prompt (optional)
 ```
 
-**Cleanup:** `rm -rf /tmp/claude/ai-review-<REVIEW_ID>` on completion or interruption.
+**Cleanup:** `rm -rf /private/tmp/claude/ai-review-<REVIEW_ID>` on completion or interruption.
 
 ## config.env Format
 
@@ -47,7 +47,7 @@ Printed to stdout; caller parses with `eval` or line-by-line:
 
 ```
 REVIEW_ID=<8-char hex>
-WORK_DIR=/tmp/claude/ai-review-<REVIEW_ID>
+WORK_DIR=/private/tmp/claude/ai-review-<REVIEW_ID>
 SCRIPT_DIR=~/.claude/debate-scripts
 ```
 

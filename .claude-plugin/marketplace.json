@@ -6,9 +6,9 @@
   },
   "plugins": [
     {
-      "name": "cc-debate",
+      "name": "debate",
       "description": "Multi-model AI plan review with parallel execution, synthesis, and debate",
-      "version": "1.1.28",
+      "version": "1.1.29",
       "source": "./",
       "author": {
         "name": "strml"

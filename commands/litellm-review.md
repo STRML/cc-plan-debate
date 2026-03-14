@@ -1,6 +1,6 @@
 ---
 description: Run AI reviewers in parallel via LiteLLM proxy, synthesize feedback, debate contradictions, and produce a consensus verdict. Supports any model available through LiteLLM. Configure reviewers in ~/.claude/debate-litellm.json.
-allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/run-parallel-openai-compat.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-openai-compat.sh:*), Bash(curl -s:*), Bash(rm -rf /private/tmp/claude/ai-review-:*), Write(/private/tmp/claude/ai-review-*), TeamCreate, TeamDelete, SendMessage, Agent
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-openai-compat.sh:*), Bash(rm -rf /private/tmp/claude/ai-review-:*), Write(/private/tmp/claude/ai-review-*), TeamCreate, TeamDelete, SendMessage, Agent
 ---
 
 # AI Multi-Model Plan Review (LiteLLM)

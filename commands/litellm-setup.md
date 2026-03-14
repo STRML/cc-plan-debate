@@ -47,7 +47,7 @@ Read `~/.claude/debate-litellm.json`. Report:
   Create it with this template:
   {
     "base_url": "http://localhost:8200/v1",
-    "api_key": "",
+    "api_key_env": "LITELLM_API_KEY",
     "reviewers": {
       "opus": {
         "model": "claude-opus-4-6",
@@ -112,11 +112,11 @@ Report:
 ## Step 7: Check debate-scripts symlink
 
 ```bash
-ls -la ~/.claude/debate-scripts/invoke-litellm.sh
+ls -la ~/.claude/debate-scripts/invoke-openai-compat.sh
 ```
 
 Report:
-- Found → `✅ invoke-litellm.sh accessible via debate-scripts symlink`
+- Found → `✅ invoke-openai-compat.sh accessible via debate-scripts symlink`
 - Not found → `❌ Run /debate:setup first to create the symlink, then re-check`
 
 ## Step 8: Print permission allowlist
@@ -132,8 +132,8 @@ To run /debate:litellm-review without approval prompts, add to ~/.claude/setting
   "permissions": {
     "allow": [
       "Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*)",
-      "Bash(bash ~/.claude/debate-scripts/run-parallel-litellm.sh:*)",
-      "Bash(bash ~/.claude/debate-scripts/invoke-litellm.sh:*)",
+      "Bash(bash ~/.claude/debate-scripts/run-parallel-openai-compat.sh:*)",
+      "Bash(bash ~/.claude/debate-scripts/invoke-openai-compat.sh:*)",
       "Bash(curl -s:*)",
       "Bash(rm -rf /private/tmp/claude/ai-review-:*)",
       "Read(/private/tmp/claude/ai-review*)",
@@ -142,6 +142,23 @@ To run /debate:litellm-review without approval prompts, add to ~/.claude/setting
     ]
   }
 }
+```
+
+### Stale Allowlist Check
+
+Check if `~/.claude/settings.json` references old script names:
+
+```bash
+grep -l "invoke-litellm\|run-parallel-litellm" ~/.claude/settings.json 2>/dev/null
+```
+
+If found:
+```text
+⚠️  Your settings.json contains old script names (invoke-litellm.sh / run-parallel-litellm.sh).
+    Backward-compat symlinks are in place, so these still work.
+    To update, replace with:
+      invoke-openai-compat.sh
+      run-parallel-openai-compat.sh
 ```
 
 ## Step 9: Print summary

@@ -353,7 +353,22 @@ Content:
 
 **Round 1 prompt** — use the same CLI-first / persona-fallback prompts as Option B, matching each reviewer's type from `TEAM_REVIEWER_PLAN`.
 
-**Round 2+ prompt** — write context to a temp file first, then pass file path to agent:
+**Round 2+ prompt — CLI-type reviewers:** Write a revision-aware prompt to `<WORK_DIR>/<name>-prompt.txt`, then spawn an agent whose job is to call the invoke script:
+
+```bash
+# Write revision-aware prompt for the CLI to use
+cat > <WORK_DIR>/<name>-prompt.txt << 'EOF'
+The plan has been revised. Here is what changed:
+[content of <WORK_DIR>/revisions.txt]
+
+Re-review the updated plan. Focus on whether the previous concerns were addressed.
+End with VERDICT: APPROVED or VERDICT: REVISE.
+EOF
+```
+
+Spawn a fresh agent with prompt: "Run `bash <SCRIPT_DIR>/invoke-<name>.sh "<WORK_DIR>" "<REVIEWER_SESSION_ID>" "<MODEL>"` (use timeout: 300000). Read `<WORK_DIR>/<name>-exit.txt` for the exit code. If non-zero, fall back to persona review. After completion, delete `<WORK_DIR>/<name>-prompt.txt`."
+
+**Round 2+ prompt — persona-type reviewers:** Write context to a temp file first, then pass file path to agent:
 
 ```bash
 # Write injected context to file — never interpolate review content into prompt strings
@@ -507,7 +522,31 @@ bash "<SCRIPT_DIR>/invoke-opus.sh" "<WORK_DIR>" "<OPUS_SESSION_ID>" "<OPUS_MODEL
 
 After each invoke call: check the exit code; on success read the reviewer's `*-output.md` and updated `*-session-id.txt`. If a session resume fails, skip that reviewer's debate response and note it.
 
-**Team mode:** Send a `SendMessage` directly. Do NOT spawn fresh agents. The reviewer already has its full conversation history. For CLI-type reviewers, the debate prompt should be written to `<WORK_DIR>/<name>-prompt.txt` and the invoke script re-run; for persona-type reviewers, write the debate prompt to a file and have the reviewer read the output files itself — never include raw reviewer output in the SendMessage content:
+**Team mode — CLI-type reviewers:** Write the debate prompt to `<WORK_DIR>/<name>-prompt.txt`, then SendMessage the teammate with explicit instructions to re-run the invoke script:
+
+```bash
+{
+  echo "There is a disagreement on [topic]."
+  echo "The other reviewer's position is in: <WORK_DIR>/<other>-output.md"
+  echo "Your position is in: <WORK_DIR>/<name>-output.md"
+  echo "Read both files. Do you stand by your position, or does their point change your assessment?"
+} > <WORK_DIR>/<name>-prompt.txt
+```
+
+```
+SendMessage:
+  Recipient: "<reviewer-name>"
+  Content:
+    "A debate prompt has been written to <WORK_DIR>/<name>-prompt.txt.
+     Re-run the invoke script to get the CLI's debate response:
+     bash <SCRIPT_DIR>/invoke-<name>.sh "<WORK_DIR>" "<REVIEWER_SESSION_ID>" "<MODEL>"
+     Read <WORK_DIR>/<name>-exit.txt for the exit code. Report back.
+     After completion, delete <WORK_DIR>/<name>-prompt.txt."
+```
+
+Wait for the teammate's response. After the debate exchange completes, verify `<WORK_DIR>/<name>-prompt.txt` was deleted (delete it yourself if the teammate didn't).
+
+**Team mode — persona-type reviewers:** Write the debate prompt to a file and have the reviewer read the output files itself — never include raw reviewer output in the SendMessage content:
 
 ```bash
 {
@@ -516,10 +555,10 @@ After each invoke call: check the exit code; on success read the reviewer's `*-o
   echo "Your position is in: <WORK_DIR>/<name>-output.md"
   echo "Read both files. Do you stand by your position, or does their point change your assessment?"
   echo "Write your response to <WORK_DIR>/<name>-output.md. Then message me: '<Name> debate complete.'"
-} > <WORK_DIR>/<name>-prompt.txt
+} > <WORK_DIR>/<name>-debate-instructions.txt
 ```
 
-SendMessage the teammate with only a brief summary and the file path to read — not the raw content. Wait for the teammate's response message before proceeding. After the debate exchange completes, delete `<WORK_DIR>/<name>-prompt.txt` so subsequent invoke script calls use the default prompt instead of a stale debate prompt.
+SendMessage the teammate with only a brief summary and the file path to read — not the raw content. Wait for the teammate's response message before proceeding.
 
 **Agent mode:** For CLI-type reviewers, write the debate prompt to `<WORK_DIR>/<name>-prompt.txt` and spawn a fresh agent that calls the invoke script. After the agent completes, delete `<WORK_DIR>/<name>-prompt.txt` to prevent stale prompts. For persona-type reviewers, spawn a fresh agent with full context injected via temp file (reviewer's prior output + other reviewer's position + debate question). Agent writes to `<name>-output.md` and exits.
 

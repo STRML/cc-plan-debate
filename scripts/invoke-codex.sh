@@ -53,11 +53,20 @@ else
   TIMEOUT_CMD=()
 fi
 
+# Plan content is always injected — even custom prompts need it since Codex
+# receives everything as a single positional argument (no stdin pipe like Gemini).
+PLAN_CONTENT="$(cat "$WORK_DIR/plan.md")"
+
 # Prompt selection
 if [ -f "$WORK_DIR/codex-prompt.txt" ]; then
-  PROMPT="$(cat "$WORK_DIR/codex-prompt.txt")"
+  CUSTOM_PROMPT="$(cat "$WORK_DIR/codex-prompt.txt")"
+  PROMPT="$CUSTOM_PROMPT
+
+---
+Implementation plan to review:
+
+$PLAN_CONTENT"
 else
-  PLAN_CONTENT="$(cat "$WORK_DIR/plan.md")"
   PROMPT="You are The Executor — a pragmatic runtime tracer. Review this implementation plan:
 
 $PLAN_CONTENT

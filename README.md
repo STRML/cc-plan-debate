@@ -14,7 +14,7 @@ Two modes of operation:
 ```bash
 # Install
 /plugin marketplace add STRML/cc-plan-debate
-/plugin install debate@cc-plan-debate
+/plugin install debate@debate-dev
 
 # Check prerequisites
 /debate:setup
@@ -28,7 +28,7 @@ Two modes of operation:
 ```bash
 # Install
 /plugin marketplace add STRML/cc-plan-debate
-/plugin install debate@cc-plan-debate
+/plugin install debate@debate-dev
 
 # Check prerequisites (verifies proxy connectivity + config)
 /debate:litellm-setup
@@ -106,7 +106,7 @@ Claude: Sending revised plan back to all reviewers...
 
 ```
 /plugin marketplace add STRML/cc-plan-debate
-/plugin install debate@cc-plan-debate
+/plugin install debate@debate-dev
 ```
 
 ### Local dev

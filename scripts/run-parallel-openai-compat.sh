@@ -1,17 +1,19 @@
 #!/bin/bash
-# Parallel runner for LiteLLM-based debate reviews.
-# Reads reviewer list from ~/.claude/debate-litellm.json, spawns
-# invoke-litellm.sh for each, and polls for completion.
+# Parallel runner for OpenAI-compatible API debate reviews.
+# Reads reviewer list from config, spawns invoke-openai-compat.sh
+# for each, and polls for completion.
 #
-# Usage: run-parallel-litellm.sh <REVIEW_ID> [reviewer1,reviewer2,...]
-#   REVIEW_ID  — 8-char hex ID (work dir: /private/tmp/claude/ai-review-<ID>)
-#   reviewers  — optional comma-separated list; defaults to all from config
+# Usage: run-parallel-openai-compat.sh <config_file> <REVIEW_ID> [reviewer1,reviewer2,...]
+#   config_file — path to JSON config
+#   REVIEW_ID   — 8-char hex ID (work dir: /private/tmp/claude/ai-review-<ID>)
+#   reviewers   — optional comma-separated list; defaults to all from config
 
-REVIEW_ID="$1"
-REVIEWER_LIST="${2:-}"
+CONFIG_FILE="${1:-}"
+REVIEW_ID="${2:-}"
+REVIEWER_LIST="${3:-}"
 
-if [ -z "$REVIEW_ID" ]; then
-  echo "Usage: $0 <REVIEW_ID> [reviewer1,reviewer2,...]" >&2
+if [ -z "$CONFIG_FILE" ] || [ -z "$REVIEW_ID" ]; then
+  echo "Usage: $0 <config_file> <REVIEW_ID> [reviewer1,reviewer2,...]" >&2
   exit 1
 fi
 
@@ -22,7 +24,6 @@ if ! [[ "$REVIEW_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
 fi
 
 WORK_DIR="/private/tmp/claude/ai-review-${REVIEW_ID}"
-CONFIG_FILE="$HOME/.claude/debate-litellm.json"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 mkdir -p "$WORK_DIR" || { echo "Failed to create $WORK_DIR" >&2; exit 1; }
@@ -34,7 +35,6 @@ fi
 
 if [ ! -f "$CONFIG_FILE" ]; then
   echo "Config not found: $CONFIG_FILE" >&2
-  echo "Create it with /debate:litellm-setup or manually." >&2
   exit 1
 fi
 
@@ -42,7 +42,10 @@ fi
 if [ -n "$REVIEWER_LIST" ]; then
   IFS=',' read -ra REVIEWERS <<< "$REVIEWER_LIST"
 else
-  mapfile -t REVIEWERS < <(jq -r '.reviewers | keys[]' "$CONFIG_FILE")
+  REVIEWERS=()
+  while IFS= read -r line; do
+    REVIEWERS+=("$line")
+  done < <(jq -r '.reviewers | keys[]' "$CONFIG_FILE")
 fi
 
 if [ ${#REVIEWERS[@]} -eq 0 ]; then
@@ -63,7 +66,7 @@ for NAME in "${REVIEWERS[@]}"; do
 
   echo "[debate] Spawning $NAME ($MODEL, timeout: ${TIMEOUT}s)..." >&2
   rm -f "$WORK_DIR/${NAME}-exit.txt"
-  nohup bash "$SCRIPT_DIR/invoke-litellm.sh" "$WORK_DIR" "$NAME" "$MODEL" "$TIMEOUT" \
+  nohup bash "$SCRIPT_DIR/invoke-openai-compat.sh" "$CONFIG_FILE" "$WORK_DIR" "$NAME" "$MODEL" "$TIMEOUT" \
     > /dev/null 2>&1 &
   disown $!
   EXIT_FILES+=("$WORK_DIR/${NAME}-exit.txt")

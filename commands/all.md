@@ -214,11 +214,13 @@ Step 1: Run the Codex invoke script:
 Step 2: Read <WORK_DIR>/codex-exit.txt for the exit code.
   - If "0": Read <WORK_DIR>/codex-output.md — this is the REAL Codex review.
     Message me: "Codex complete. Exit: 0"
-  - If "77": Codex hit a sandbox panic. Read <WORK_DIR>/codex-output.md for details.
-    Message me: "Codex sandbox panic. Exit: 77"
-  - If "124": Codex timed out. Message me: "Codex timed out. Exit: 124"
-  - Other: Read <WORK_DIR>/codex-output.md for error details.
-    Message me: "Codex failed. Exit: <code>"
+  - If non-zero (77 sandbox panic, 124 timeout, or other failure):
+    Fall back to persona mode. Read the plan at <WORK_DIR>/plan.md and write your
+    own review as The Executor — a pragmatic runtime tracer. Focus on shell correctness,
+    exit code handling, race conditions, file I/O, command availability.
+    Write your review to <WORK_DIR>/codex-output.md. End with VERDICT: APPROVED or VERDICT: REVISE.
+    Write "0" to <WORK_DIR>/codex-exit.txt.
+    Message me: "Codex complete (CLI failed, persona fallback). Exit: 0"
 
 Wait for further instructions — you may be asked to debate or re-review.
 ```
@@ -260,9 +262,13 @@ Step 1: Run the Gemini invoke script:
 Step 2: Read <WORK_DIR>/gemini-exit.txt for the exit code.
   - If "0": Read <WORK_DIR>/gemini-output.md — this is the REAL Gemini review.
     Message me: "Gemini complete. Exit: 0"
-  - If "124": Gemini timed out. Message me: "Gemini timed out. Exit: 124"
-  - Other: Read <WORK_DIR>/gemini-output.md for error details.
-    Message me: "Gemini failed. Exit: <code>"
+  - If non-zero (124 timeout or other failure):
+    Fall back to persona mode. Read the plan at <WORK_DIR>/plan.md and write your
+    own review as The Architect — a systems architect reviewing for structural integrity.
+    Focus on approach validity, over-engineering, missing phases, graceful degradation.
+    Write your review to <WORK_DIR>/gemini-output.md. End with VERDICT: APPROVED or VERDICT: REVISE.
+    Write "0" to <WORK_DIR>/gemini-exit.txt.
+    Message me: "Gemini complete (CLI failed, persona fallback). Exit: 0"
 
 Wait for further instructions — you may be asked to debate or re-review.
 ```
@@ -327,9 +333,15 @@ For CLI-type reviewers (codex/gemini with CLI available), send:
 ```
 Recipient: "<reviewer-name>"
 Content:
-  "The plan has been revised. Re-run the invoke script to get a fresh CLI review:
+  "The plan has been revised. Before re-running the invoke script, write a revision-aware
+   prompt to <WORK_DIR>/<name>-prompt.txt that includes:
+   1. What changed in the revision (read <WORK_DIR>/revisions.txt)
+   2. A note to focus on whether the previous concerns were addressed
+   Then re-run the invoke script:
    bash <SCRIPT_DIR>/invoke-<name>.sh "<WORK_DIR>" "<SESSION_ID>" "<MODEL>"
-   Read the exit code from <WORK_DIR>/<name>-exit.txt and report back."
+   Read the exit code from <WORK_DIR>/<name>-exit.txt and report back.
+   After the invoke script completes, delete <WORK_DIR>/<name>-prompt.txt to avoid
+   stale prompts on subsequent rounds."
 ```
 
 For persona-type reviewers (opus, or codex/gemini without CLI), send:
@@ -514,10 +526,10 @@ After each invoke call: check the exit code; on success read the reviewer's `*-o
   echo "Your position is in: <WORK_DIR>/<name>-output.md"
   echo "Read both files. Do you stand by your position, or does their point change your assessment?"
   echo "Write your response to <WORK_DIR>/<name>-output.md. Then message me: '<Name> debate complete.'"
-} > <WORK_DIR>/<name>-debate-prompt.txt
+} > <WORK_DIR>/<name>-prompt.txt
 ```
 
-SendMessage the teammate with only a brief summary and the file path to read — not the raw content. Wait for the teammate's response message before proceeding.
+SendMessage the teammate with only a brief summary and the file path to read — not the raw content. Wait for the teammate's response message before proceeding. After the debate exchange completes, delete `<WORK_DIR>/<name>-prompt.txt` so subsequent invoke script calls use the default prompt instead of a stale debate prompt.
 
 **Agent mode:** For CLI-type reviewers, write the debate prompt to `<WORK_DIR>/<name>-prompt.txt` and spawn a fresh agent that calls the invoke script. For persona-type reviewers, spawn a fresh agent with full context injected via temp file (reviewer's prior output + other reviewer's position + debate question). Agent writes to `<name>-output.md` and exits.
 

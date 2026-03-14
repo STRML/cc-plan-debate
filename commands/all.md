@@ -85,7 +85,7 @@ bash ~/.claude/debate-scripts/debate-setup.sh
 Then write `config.env` to `<WORK_DIR>/config.env` with the model values (use user-provided overrides or defaults):
 
 ```
-CODEX_MODEL=<CODEX_MODEL|gpt-5.3-codex>
+CODEX_MODEL=<CODEX_MODEL|>
 GEMINI_MODEL=<GEMINI_MODEL|>
 OPUS_MODEL=<OPUS_MODEL|claude-opus-4-6>
 ```

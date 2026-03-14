@@ -6,7 +6,7 @@
 # Usage: invoke-codex.sh <work_dir> [session_id] [model]
 #   work_dir   — temp directory for this review (must contain plan.md)
 #   session_id — optional; if set, attempts resume; falls back to fresh on failure
-#   model      — optional; defaults to gpt-5.3-codex
+#   model      — optional; if empty, auto-probes for best available model
 #
 # Env: TIMEOUT_BIN — optional path to timeout binary (timeout or gtimeout)
 #
@@ -25,7 +25,7 @@
 
 WORK_DIR="${1:-}"
 SESSION_ID="${2:-}"
-MODEL="${3:-gpt-5.3-codex}"
+MODEL="${3:-}"
 
 if [ -z "$WORK_DIR" ]; then
   echo "Usage: $0 <work_dir> [session_id] [model]" >&2
@@ -40,6 +40,34 @@ fi
 if [ ! -f "$WORK_DIR/plan.md" ]; then
   echo "invoke-codex.sh: plan.md not found in $WORK_DIR" >&2
   exit 1
+fi
+
+# If no explicit model given, probe for the best available model first.
+# This avoids defaulting to a model name that doesn't exist (causing a failed
+# call + fallback to a worse model like gpt-4.1).
+if [ -z "$MODEL" ]; then
+  SCRIPT_DIR_SELF="$(cd "$(dirname "$0")" && pwd)"
+  echo "[codex] Probing for best available model..." >&2
+  PROBED_MODEL=$(bash "$SCRIPT_DIR_SELF/probe-model.sh" codex "$WORK_DIR" 2>/dev/null)
+  PROBE_STATUS=$?
+  if [ "$PROBE_STATUS" -eq 2 ]; then
+    # Sandbox panic — can't run codex at all
+    {
+      echo "## Codex — Sandbox Incompatible"
+      echo ""
+      echo "Codex CLI panicked due to a macOS sandbox restriction."
+      echo "Fix: add \`codex:*\` to \`sandbox.excludedCommands\` in ~/.claude/settings.json"
+    } > "$WORK_DIR/codex-output.md"
+    echo "77" > "$WORK_DIR/codex-exit.txt"
+    : > "$WORK_DIR/codex-session-id.txt"
+    exit 77
+  elif [ -n "$PROBED_MODEL" ]; then
+    MODEL="$PROBED_MODEL"
+    echo "[codex] Selected model: $MODEL" >&2
+  else
+    MODEL="gpt-5.3-codex"
+    echo "[codex] Probe inconclusive — defaulting to $MODEL" >&2
+  fi
 fi
 
 # Resolve timeout
@@ -122,26 +150,6 @@ if [ -z "$SESSION_ID" ]; then
     echo "[codex] Failed (exit $CODEX_EXIT)." >&2
   fi
 
-  # On failure (not sandbox panic, not timeout): check for model-availability error
-  # and reprobe for the best accessible model, then retry once.
-  if [ "$CODEX_EXIT" -ne 0 ] && [ "$CODEX_EXIT" -ne 124 ] \
-     && ! grep -q "Attempted to create a NULL object" "$WORK_DIR/codex-stdout.txt" 2>/dev/null; then
-    SCRIPT_DIR_SELF="$(cd "$(dirname "$0")" && pwd)"
-    PROBED_MODEL=$(bash "$SCRIPT_DIR_SELF/probe-model.sh" codex "$WORK_DIR" --fresh 2>/dev/null)
-    PROBE_STATUS=$?
-    if [ "$PROBE_STATUS" -eq 0 ] && [ -n "$PROBED_MODEL" ] && [ "$PROBED_MODEL" != "$MODEL" ]; then
-      echo "[codex] '$MODEL' unavailable — retrying with '$PROBED_MODEL'..." >&2
-      MODEL="$PROBED_MODEL"
-      : > "$WORK_DIR/codex-stdout.txt"
-      "${TIMEOUT_CMD[@]}" codex exec \
-        -m "$MODEL" \
-        -s read-only \
-        --json \
-        "$PROMPT" \
-        2>&1 | tee "$WORK_DIR/codex-stdout.txt"
-      CODEX_EXIT=${PIPESTATUS[0]}
-    fi
-  fi
 fi
 
 echo "$CODEX_EXIT" > "$WORK_DIR/codex-exit.txt"

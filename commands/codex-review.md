@@ -37,7 +37,7 @@ After installing, re-run /debate:codex-review.
 
 ## Step 1: Setup
 
-**Model:** Check if a model argument was passed (e.g., `/debate:codex-review o4-mini`). If so, use it. Default: `gpt-5.3-codex`. Store as `MODEL`.
+**Model:** Check if a model argument was passed (e.g., `/debate:codex-review o4-mini`). If so, store as `MODEL`. If not, leave `MODEL` empty — `invoke-codex.sh` will auto-probe for the best available model.
 
 If `~/.claude/debate-scripts` does not exist, stop and display:
 ```
@@ -198,7 +198,7 @@ Max 5 rounds. Each round preserves Codex's conversation context via session resu
 ## Rules
 
 - Claude **actively revises the plan** based on Codex feedback between rounds — not just passing messages
-- Default model is `gpt-5.3-codex`. Accept model override from the user's arguments (e.g., `/debate:codex-review o4-mini`)
+- Default: auto-probe for best available model. Accept explicit model override (e.g., `/debate:codex-review o4-mini`)
 - Always use read-only sandbox mode — Codex should never write files
 - Max 5 review rounds to prevent infinite loops
 - Show the user each round's feedback and revisions so they can follow along

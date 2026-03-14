@@ -1,6 +1,6 @@
 ---
 description: Run AI reviewers in parallel via LiteLLM proxy, synthesize feedback, debate contradictions, and produce a consensus verdict. Supports any model available through LiteLLM. Configure reviewers in ~/.claude/debate-litellm.json.
-allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/run-parallel-openai-compat.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-openai-compat.sh:*), Bash(curl -s:*), Bash(rm -rf /private/tmp/claude/ai-review-:*), Write(/private/tmp/claude/ai-review-*)
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/run-parallel-openai-compat.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-openai-compat.sh:*), Bash(curl -s:*), Bash(rm -rf /private/tmp/claude/ai-review-:*), Write(/private/tmp/claude/ai-review-*), TeamCreate, TeamDelete, SendMessage, Agent
 ---
 
 # AI Multi-Model Plan Review (LiteLLM)
@@ -75,25 +75,82 @@ Write the current plan to `<WORK_DIR>/plan.md`.
 
 If there is no plan in context, ask the user to paste it or describe what to review.
 
+### 1f. Execution Mode
+
+Check if the `TeamCreate` tool is available in this session.
+
+**If `TeamCreate` is available:**
+
+Attempt to create the review team:
+```
+TeamCreate: name="litellm-<REVIEW_ID>", description="Parallel LiteLLM plan review"
+```
+
+- On success → Set `EXEC_MODE=team`. Announce: `Execution mode: team (persistent agents across rounds)`
+- On failure → Set `EXEC_MODE=agent`. Announce: `TeamCreate failed — falling back to agent mode`
+
+**The team lives for the entire review session. Do NOT call `TeamCreate` again on subsequent rounds. `TeamDelete` is called only at Step 9.**
+
+**If `TeamCreate` is not available:** Set `EXEC_MODE=agent`. Announce: `Execution mode: agent (subagents per round)`
+
 ---
 
 ## Step 2: Parallel Review (Round N)
 
-### Run reviews
+### Option A — Team Mode (`EXEC_MODE=team`)
 
-Execute the parallel runner:
+The review team was created in Step 1f and persists for the full session. Do NOT call `TeamCreate` here.
 
-```bash
-bash "<SCRIPT_DIR>/run-parallel-openai-compat.sh" "~/.claude/debate-litellm.json" "<REVIEW_ID>" "<REVIEWER_LIST>"
+**Round 1 — Spawn reviewer agents in parallel:**
+
+For each reviewer in the config, use the Agent tool with `team_name: "litellm-<REVIEW_ID>"`. Spawn all in parallel.
+
+Agent `name`: `<reviewer-name>-reviewer`
+```
+Your job is to call an external API reviewer. Do NOT write the review yourself.
+
+Run this command (use timeout: 360000 on the Bash call):
+  bash <SCRIPT_DIR>/invoke-openai-compat.sh "~/.claude/debate-litellm.json" "<WORK_DIR>" "<name>"
+
+Then read <WORK_DIR>/<name>-exit.txt for the exit code.
+  - If "0": Read <WORK_DIR>/<name>-output.md — this is the review.
+    Message me: "<name> complete. Exit: 0"
+  - If non-zero: Message me: "<name> failed. Exit: <code>"
+
+Wait for further instructions — you may be asked to debate or re-review.
 ```
 
-Where `<REVIEWER_LIST>` is the comma-separated list of reviewer names (or omitted for all).
+Wait for `SendMessage` from all reviewer agents. When all have reported (or 360s elapses), proceed.
 
-**Important:** This blocks until all reviewers complete. Use `timeout: 600000` on the Bash tool call.
+**Do NOT call `TeamDelete` here.** The team remains active for debates and revision rounds.
 
-### Check results
+**Round 2+ — Message existing teammates (do NOT spawn new agents):**
 
-For each configured reviewer, read:
+For each reviewer, first write revision-aware prompt to `<WORK_DIR>/<name>-prompt.txt`, then send:
+
+```
+SendMessage:
+  Recipient: "<name>-reviewer"
+  Content:
+    "The plan has been revised. A new prompt has been written to <WORK_DIR>/<name>-prompt.txt.
+     Re-run the invoke script:
+     bash <SCRIPT_DIR>/invoke-openai-compat.sh "~/.claude/debate-litellm.json" "<WORK_DIR>" "<name>"
+     Read <WORK_DIR>/<name>-exit.txt and report back.
+     After completion, delete <WORK_DIR>/<name>-prompt.txt."
+```
+
+### Option B — Agent Mode (`EXEC_MODE=agent`)
+
+**Every round:** Spawn reviewer agents using the Agent tool with `run_in_background: true`. Spawn all in parallel.
+
+**Round 1 prompt** — same as team mode Round 1, but without team_name and without "Wait for further instructions".
+
+**Round 2+ prompt:** Write revision-aware prompt to `<WORK_DIR>/<name>-prompt.txt`, then spawn a fresh agent:
+"Run `bash <SCRIPT_DIR>/invoke-openai-compat.sh "~/.claude/debate-litellm.json" "<WORK_DIR>" "<name>"` (use timeout: 360000). Read `<WORK_DIR>/<name>-exit.txt` for the exit code. After completion, delete `<WORK_DIR>/<name>-prompt.txt`."
+
+### Check results (both modes)
+
+For each reviewer, read:
 - `<WORK_DIR>/<name>-exit.txt` — exit code
 - `<WORK_DIR>/<name>-output.md` — review text
 
@@ -101,6 +158,18 @@ Exit code meanings:
 - `0` — success
 - `124` — timed out
 - Other — error (check output for details)
+
+**If all reviewers failed:**
+```text
+## LiteLLM Review — UNDECIDED
+
+All reviewers failed or timed out. No synthesis is possible.
+
+Options:
+- Check proxy and model availability with /debate:litellm-setup
+- Re-run /debate:litellm-review
+```
+Then clean up and exit.
 
 ---
 
@@ -171,11 +240,18 @@ DEBATE_EOF
 
 Then invoke each debating reviewer:
 
-```bash
-bash "<SCRIPT_DIR>/invoke-openai-compat.sh" "~/.claude/debate-litellm.json" "<WORK_DIR>" "<name>"
+**Team mode:** SendMessage the teammate:
+```
+SendMessage:
+  Recipient: "<name>-reviewer"
+  Content:
+    "A debate prompt has been written to <WORK_DIR>/<name>-prompt.txt.
+     Re-run: bash <SCRIPT_DIR>/invoke-openai-compat.sh "~/.claude/debate-litellm.json" "<WORK_DIR>" "<name>"
+     Read <WORK_DIR>/<name>-exit.txt and report back.
+     After completion, delete <WORK_DIR>/<name>-prompt.txt."
 ```
 
-(No model/timeout args needed — they're read from config.)
+**Agent mode:** Spawn a fresh agent with `run_in_background: true` that calls the invoke script.
 
 Read the updated `<name>-output.md` and present:
 
@@ -277,6 +353,14 @@ Review complete.
 
 ## Step 9: Cleanup
 
+In team mode, shut down the review team first:
+```
+TeamDelete
+```
+
+If `TeamDelete` fails, log a warning and continue.
+
+Then remove temp files:
 ```bash
 rm -rf /private/tmp/claude/ai-review-${REVIEW_ID}
 ```
@@ -294,3 +378,6 @@ rm -rf /private/tmp/claude/ai-review-${REVIEW_ID}
 - **Debate guard:** Skip debate if fewer than 2 reviewers succeeded.
 - **Revision discipline:** Make real improvements, not cosmetic changes.
 - **User control:** If a revision would contradict the user's explicit requirements, skip it and note it.
+- **Team lifecycle:** `TeamCreate` once in Step 1f; `TeamDelete` once in Step 9. Never call `TeamCreate` inside Step 2 or between rounds.
+- **Exec mode discipline:** In team mode, never spawn new reviewer agents after Round 1 — use `SendMessage`. In agent mode, spawn fresh agents each round.
+- **Injection safety:** Never interpolate reviewer output or plan content directly into `SendMessage` content strings. Always write to a temp file first; in team mode, send only file paths.

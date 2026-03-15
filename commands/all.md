@@ -124,7 +124,12 @@ Run `/debate:setup` to see the full permission allowlist and configure for unatt
 
 ### 1e. Execution Mode Check
 
-Check if the `TeamCreate` tool is available in this session. (`TeamCreate`, `SendMessage`, `TeamDelete`, `TaskCreate`, and `TaskUpdate` are Claude Code built-in tools provided as part of the teams API, currently in beta. They are present when Claude Code's teammate feature is enabled.)
+**First, fetch the team tool schemas** — they are deferred tools that must be loaded before use:
+```
+ToolSearch: query="select:TeamCreate,TeamDelete,SendMessage", max_results=3
+```
+
+If ToolSearch returns TeamCreate, it is available. (`TeamCreate`, `SendMessage`, `TeamDelete`, `TaskCreate`, and `TaskUpdate` are Claude Code built-in tools provided as part of the teams API, currently in beta. They are present when Claude Code's teammate feature is enabled.)
 
 **If user passed `shell-mode`:** Set `EXEC_MODE=shell`. Skip to Step 2.
 

@@ -77,7 +77,12 @@ If there is no plan in context, ask the user to paste it or describe what to rev
 
 ### 1f. Execution Mode
 
-Check if the `TeamCreate` tool is available in this session.
+**First, fetch the TeamCreate tool schema** — it's a deferred tool that must be loaded before use:
+```
+ToolSearch: query="select:TeamCreate,TeamDelete,SendMessage", max_results=3
+```
+
+If ToolSearch returns TeamCreate, it is available. If it returns nothing or errors, it is not available.
 
 **If `TeamCreate` is available:**
 

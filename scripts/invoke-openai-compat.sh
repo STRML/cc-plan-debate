@@ -186,12 +186,12 @@ HEADER_KEYS=$(jq -r '.headers // {} | keys[]' "$CONFIG_FILE" 2>/dev/null) || tru
 while IFS= read -r hkey; do
   [ -z "$hkey" ] && continue
   hval=$(jq -r --arg k "$hkey" '.headers[$k]' "$CONFIG_FILE")
-  # Reject \r, \n, null bytes
-  if [[ "$hkey" == *$'\r'* ]] || [[ "$hkey" == *$'\n'* ]] || [[ "$hkey" == *$'\0'* ]]; then
+  # Reject \r and \n (null bytes can't exist in bash strings)
+  if [[ "$hkey" == *$'\r'* ]] || [[ "$hkey" == *$'\n'* ]]; then
     echo "invoke-openai-compat: invalid header key containing control chars: '$hkey'" >&2
     exit 1
   fi
-  if [[ "$hval" == *$'\r'* ]] || [[ "$hval" == *$'\n'* ]] || [[ "$hval" == *$'\0'* ]]; then
+  if [[ "$hval" == *$'\r'* ]] || [[ "$hval" == *$'\n'* ]]; then
     echo "invoke-openai-compat: invalid header value for '$hkey' containing control chars" >&2
     exit 1
   fi

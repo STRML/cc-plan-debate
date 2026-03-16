@@ -7,18 +7,14 @@
 #
 # Output (stdout, key=value):
 #   REVIEW_ID=<8-char hex>
-#   WORK_DIR=/private/tmp/claude/ai-review-<REVIEW_ID>
+#   WORK_DIR=<CWD>/.claude/tmp/ai-review-<REVIEW_ID>
 #   SCRIPT_DIR=<stable symlink ~/.claude/debate-scripts, or this script's own dir>
 
 REVIEW_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | head -c 8)
 
-# Use /private/tmp on macOS to match Claude Code's sandbox allowlist.
-# On Linux, /private/tmp won't exist so fall back to /tmp.
-if [ -d /private/tmp ]; then
-  WORK_DIR="/private/tmp/claude/ai-review-${REVIEW_ID}"
-else
-  WORK_DIR="/tmp/claude/ai-review-${REVIEW_ID}"
-fi
+# Use .claude/tmp/ inside the project directory so all reads/writes stay
+# within the CWD sandbox allowlist — avoids permission prompts for /tmp paths.
+WORK_DIR="${PWD}/.claude/tmp/ai-review-${REVIEW_ID}"
 
 mkdir -p "$WORK_DIR" || { echo "ERROR: failed to create $WORK_DIR" >&2; exit 1; }
 

@@ -5,7 +5,7 @@
 #
 # Usage: run-parallel-openai-compat.sh <config_file> <REVIEW_ID> [reviewer1,reviewer2,...]
 #   config_file — path to JSON config
-#   REVIEW_ID   — 8-char hex ID (work dir: /private/tmp/claude/ai-review-<ID>)
+#   REVIEW_ID   — 8-char hex ID (work dir: .claude/tmp/ai-review-<ID>)
 #   reviewers   — optional comma-separated list; defaults to all from config
 
 CONFIG_FILE="${1:-}"
@@ -23,7 +23,7 @@ if ! [[ "$REVIEW_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   exit 1
 fi
 
-WORK_DIR="/private/tmp/claude/ai-review-${REVIEW_ID}"
+WORK_DIR=".claude/tmp/ai-review-${REVIEW_ID}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 mkdir -p "$WORK_DIR" || { echo "Failed to create $WORK_DIR" >&2; exit 1; }

@@ -193,10 +193,10 @@ To run /debate:openrouter-review without approval prompts, add to ~/.claude/sett
       "Bash(bash ~/.claude/debate-scripts/run-parallel-openai-compat.sh:*)",
       "Bash(bash ~/.claude/debate-scripts/invoke-openai-compat.sh:*)",
       "Bash(curl -s:*)",
-      "Bash(rm -rf /private/tmp/claude/ai-review-:*)",
-      "Read(/private/tmp/claude/ai-review*)",
-      "Edit(/private/tmp/claude/ai-review*)",
-      "Write(/private/tmp/claude/ai-review*)"
+      "Bash(rm -rf .claude/tmp/ai-review-:*)",
+      "Read(.claude/tmp/ai-review*)",
+      "Edit(.claude/tmp/ai-review*)",
+      "Write(.claude/tmp/ai-review*)"
     ]
   }
 }

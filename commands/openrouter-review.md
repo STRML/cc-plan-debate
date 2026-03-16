@@ -1,6 +1,6 @@
 ---
 description: Run AI reviewers in parallel via OpenRouter, synthesize feedback, debate contradictions, and produce a consensus verdict. Supports any model available through OpenRouter. Configure reviewers in ~/.claude/debate-openrouter.json.
-allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-openai-compat.sh:*), Bash(rm -rf /private/tmp/claude/ai-review-:*), Write(/private/tmp/claude/ai-review-*), TeamCreate, TeamDelete, SendMessage, Agent
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-openai-compat.sh:*), Bash(rm -rf .claude/tmp/ai-review-:*), Write(.claude/tmp/ai-review-*), TeamCreate, TeamDelete, SendMessage, Agent
 ---
 
 # AI Multi-Model Plan Review (OpenRouter)
@@ -353,7 +353,7 @@ If `TeamDelete` fails, log a warning and continue.
 
 Then remove temp files:
 ```bash
-rm -rf /private/tmp/claude/ai-review-${REVIEW_ID}
+rm -rf .claude/tmp/ai-review-${REVIEW_ID}
 ```
 
 ---

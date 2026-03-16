@@ -353,7 +353,7 @@ The model returned no content. Check LiteLLM proxy logs for errors. Some models 
 - Gemini runs with `-s` (sandbox) — cannot execute shell commands
 - Gemini runs with `-e ""` — extensions and skills are disabled for each review call
 - Opus runs with `--tools ""` — no tool access; `--disable-slash-commands`; `--strict-mcp-config`; hooks disabled — read-only, stateless review
-- **LiteLLM mode:** JSON payloads are constructed via `jq`, which safely escapes plan content and prompts before they reach `curl`. API calls use `curl` with the `-d` flag passing jq-built JSON. Prompt files (`*-prompt.txt`) are cleaned up by `run-parallel-litellm.sh` after each round; work directories in `/private/tmp/claude/ai-review-*` are cleaned up by the command file's final cleanup step.
+- **LiteLLM mode:** JSON payloads are constructed via `jq`, which safely escapes plan content and prompts before they reach `curl`. API calls use `curl` with the `-d` flag passing jq-built JSON. Prompt files (`*-prompt.txt`) are cleaned up by `run-parallel-litellm.sh` after each round; work directories in `.claude/tmp/ai-review-*` are cleaned up by the command file's final cleanup step.
 
 ## Custom Reviewers
 

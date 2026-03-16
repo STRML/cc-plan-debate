@@ -1,6 +1,6 @@
 ---
 description: Run ALL available AI reviewers in parallel on the current plan, synthesize their feedback, debate contradictions, and produce a consensus verdict. Supports Codex, Gemini, and Claude Opus with graceful fallback if any are unavailable.
-allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/run-parallel.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-codex.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-opus.sh:*), Bash(rm -rf /private/tmp/claude/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(gemini -s:*), Write(/private/tmp/claude/ai-review-*)
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/run-parallel.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-codex.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-gemini.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-opus.sh:*), Bash(rm -rf .claude/tmp/ai-review-:*), Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(gemini -s:*), Write(.claude/tmp/ai-review-*)
 ---
 
 # AI Multi-Model Plan Review
@@ -93,23 +93,23 @@ OPUS_MODEL=<OPUS_MODEL|claude-opus-4-6>
 Use `SCRIPT_DIR` for all subsequent `bash` calls — never re-glob.
 
 Temp file paths:
-- Plan: `/private/tmp/claude/ai-review-${REVIEW_ID}/plan.md`
-- Codex output: `/private/tmp/claude/ai-review-${REVIEW_ID}/codex-output.md`
-- Codex exit code: `/private/tmp/claude/ai-review-${REVIEW_ID}/codex-exit.txt`
-- Codex session ID: `/private/tmp/claude/ai-review-${REVIEW_ID}/codex-session-id.txt`
-- Gemini output: `/private/tmp/claude/ai-review-${REVIEW_ID}/gemini-output.md`
-- Gemini exit code: `/private/tmp/claude/ai-review-${REVIEW_ID}/gemini-exit.txt`
-- Gemini session UUID: `/private/tmp/claude/ai-review-${REVIEW_ID}/gemini-session-id.txt`
-- Opus JSON (raw): `/private/tmp/claude/ai-review-${REVIEW_ID}/opus-raw.json`
-- Opus output: `/private/tmp/claude/ai-review-${REVIEW_ID}/opus-output.md`
-- Opus exit code: `/private/tmp/claude/ai-review-${REVIEW_ID}/opus-exit.txt`
-- Opus session ID: `/private/tmp/claude/ai-review-${REVIEW_ID}/opus-session-id.txt`
+- Plan: `.claude/tmp/ai-review-${REVIEW_ID}/plan.md`
+- Codex output: `.claude/tmp/ai-review-${REVIEW_ID}/codex-output.md`
+- Codex exit code: `.claude/tmp/ai-review-${REVIEW_ID}/codex-exit.txt`
+- Codex session ID: `.claude/tmp/ai-review-${REVIEW_ID}/codex-session-id.txt`
+- Gemini output: `.claude/tmp/ai-review-${REVIEW_ID}/gemini-output.md`
+- Gemini exit code: `.claude/tmp/ai-review-${REVIEW_ID}/gemini-exit.txt`
+- Gemini session UUID: `.claude/tmp/ai-review-${REVIEW_ID}/gemini-session-id.txt`
+- Opus JSON (raw): `.claude/tmp/ai-review-${REVIEW_ID}/opus-raw.json`
+- Opus output: `.claude/tmp/ai-review-${REVIEW_ID}/opus-output.md`
+- Opus exit code: `.claude/tmp/ai-review-${REVIEW_ID}/opus-exit.txt`
+- Opus session ID: `.claude/tmp/ai-review-${REVIEW_ID}/opus-session-id.txt`
 
-**Cleanup:** If any step fails or the user interrupts, always run `rm -rf /private/tmp/claude/ai-review-${REVIEW_ID}` before stopping.
+**Cleanup:** If any step fails or the user interrupts, always run `rm -rf .claude/tmp/ai-review-${REVIEW_ID}` before stopping.
 
 ### 1c. Capture the plan
 
-Write the current plan to `/private/tmp/claude/ai-review-${REVIEW_ID}/plan.md`.
+Write the current plan to `.claude/tmp/ai-review-${REVIEW_ID}/plan.md`.
 
 If there is no plan in the current context, ask the user to paste it or describe what they want reviewed.
 
@@ -611,7 +611,7 @@ VERDICT: SPLIT — Reviewers disagree. [Summary]. Claude recommends: [proceed/re
 1. **Claude revises the plan** — address highest-priority concerns from all reviewers
 2. Write revision summary to a file (never inline in shell strings):
    ```bash
-   cat > /private/tmp/claude/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
+   cat > .claude/tmp/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
    [Write revision bullets before closing the heredoc]
    EOF
    ```
@@ -620,7 +620,7 @@ VERDICT: SPLIT — Reviewers disagree. [Summary]. Claude recommends: [proceed/re
    ### Revisions (Round N)
    - [What was changed and why]
    ```
-4. Rewrite `/private/tmp/claude/ai-review-${REVIEW_ID}/plan.md` with the revised plan
+4. Rewrite `.claude/tmp/ai-review-${REVIEW_ID}/plan.md` with the revised plan
 5. Return to **Step 2** with incremented round counter. In team mode, do NOT call `TeamCreate` again — the team from Step 1e is still active; teammates will be messaged (Option B Round 2+).
 
 If max rounds (3) reached without unanimous approval:
@@ -643,7 +643,7 @@ You may:
 
 Before cleanup, always display the final plan so it persists in the conversation context. The user will need it after clearing context to implement.
 
-Read `/private/tmp/claude/ai-review-${REVIEW_ID}/plan.md` and output it under a clear header:
+Read `.claude/tmp/ai-review-${REVIEW_ID}/plan.md` and output it under a clear header:
 
 ```
 ---
@@ -668,7 +668,7 @@ If `TeamDelete` fails, log a warning: `"TeamDelete failed for debate-<REVIEW_ID>
 Then remove temp files:
 
 ```bash
-rm -rf /private/tmp/claude/ai-review-${REVIEW_ID}
+rm -rf .claude/tmp/ai-review-${REVIEW_ID}
 ```
 
 If any step failed before reaching this step, still run both cleanup steps (TeamDelete if in team mode, then rm -rf).

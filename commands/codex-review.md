@@ -1,6 +1,6 @@
 ---
 description: Send the current plan to OpenAI Codex CLI for iterative review. Claude and Codex go back-and-forth until Codex approves or max 5 rounds reached.
-allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-codex.sh:*), Bash(rm -rf /private/tmp/claude/ai-review-:*), Bash(which codex:*)
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-codex.sh:*), Bash(rm -rf .claude/tmp/ai-review-:*), Bash(which codex:*)
 ---
 
 # Codex Plan Review (Iterative)
@@ -53,11 +53,11 @@ bash ~/.claude/debate-scripts/debate-setup.sh
 
 Use `SCRIPT_DIR` for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan.md`, `codex-output.md`, `codex-session-id.txt`, `codex-exit.txt`
 
-**Cleanup:** If any step fails or the user interrupts, always run `rm -rf /private/tmp/claude/ai-review-${REVIEW_ID}` before stopping.
+**Cleanup:** If any step fails or the user interrupts, always run `rm -rf .claude/tmp/ai-review-${REVIEW_ID}` before stopping.
 
 ## Step 2: Capture the Plan
 
-1. Write the full plan content to `/private/tmp/claude/ai-review-${REVIEW_ID}/plan.md`
+1. Write the full plan content to `.claude/tmp/ai-review-${REVIEW_ID}/plan.md`
 2. If there is no plan in the current context, ask the user what they want reviewed
 
 ## Step 3: Initial Review (Round 1)
@@ -75,7 +75,7 @@ The script writes the review to `codex-output.md` and the session ID to `codex-s
 
 ## Step 4: Read Review & Check Verdict
 
-1. Read `/private/tmp/claude/ai-review-${REVIEW_ID}/codex-output.md`
+1. Read `.claude/tmp/ai-review-${REVIEW_ID}/codex-output.md`
 2. Present Codex's review:
 
 ```text
@@ -94,11 +94,11 @@ The script writes the review to `codex-output.md` and the session ID to `codex-s
 
 Based on Codex's feedback:
 
-1. **Revise the plan** — address each issue Codex raised. Update the plan content in the conversation context and rewrite `/private/tmp/claude/ai-review-${REVIEW_ID}/plan.md` with the revised version.
+1. **Revise the plan** — address each issue Codex raised. Update the plan content in the conversation context and rewrite `.claude/tmp/ai-review-${REVIEW_ID}/plan.md` with the revised version.
 2. **Write the revision summary to a file** (never compose this inline in a shell string):
 
 ```bash
-cat > /private/tmp/claude/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
+cat > .claude/tmp/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
 [Write the revision bullets here before closing the heredoc]
 EOF
 ```
@@ -120,15 +120,15 @@ Write the resume prompt, then call the script — it handles resume vs fresh-fal
 {
   echo "I've revised the plan based on your feedback. Here is the updated plan:"
   echo ""
-  cat /private/tmp/claude/ai-review-${REVIEW_ID}/plan.md
+  cat .claude/tmp/ai-review-${REVIEW_ID}/plan.md
   echo ""
   echo "---"
   echo "Here's what I changed:"
-  cat /private/tmp/claude/ai-review-${REVIEW_ID}/revisions.txt
+  cat .claude/tmp/ai-review-${REVIEW_ID}/revisions.txt
   echo ""
   echo "Please re-review. If the plan is now solid and ready to implement, end with: VERDICT: APPROVED"
   echo "If more changes are needed, end with: VERDICT: REVISE"
-} > /private/tmp/claude/ai-review-${REVIEW_ID}/codex-prompt.txt
+} > .claude/tmp/ai-review-${REVIEW_ID}/codex-prompt.txt
 
 bash "<SCRIPT_DIR>/invoke-codex.sh" \
   "<WORK_DIR>" "<CODEX_SESSION_ID>" "<MODEL>"
@@ -173,7 +173,7 @@ Then display the final plan so it persists in the conversation context after cle
 ---
 ## Final Plan
 
-[full content of /private/tmp/claude/ai-review-${REVIEW_ID}/plan.md]
+[full content of .claude/tmp/ai-review-${REVIEW_ID}/plan.md]
 
 ---
 Review complete. Clear context and implement this plan, or save it elsewhere first.
@@ -182,7 +182,7 @@ Review complete. Clear context and implement this plan, or save it elsewhere fir
 ## Step 8: Cleanup
 
 ```bash
-rm -rf /private/tmp/claude/ai-review-${REVIEW_ID}
+rm -rf .claude/tmp/ai-review-${REVIEW_ID}
 ```
 
 ## Loop Summary

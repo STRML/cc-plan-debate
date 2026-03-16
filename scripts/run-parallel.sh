@@ -14,7 +14,7 @@ if [ -z "$REVIEW_ID" ]; then
   exit 1
 fi
 
-WORK_DIR="/private/tmp/claude/ai-review-${REVIEW_ID}"
+WORK_DIR=".claude/tmp/ai-review-${REVIEW_ID}"
 
 mkdir -p "$WORK_DIR" || { echo "Failed to create $WORK_DIR" >&2; exit 1; }
 

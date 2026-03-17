@@ -1,0 +1,126 @@
+#!/bin/bash
+# Parallel runner for acpx-based debate reviews.
+# Reads reviewer list from config, spawns invoke-acpx.sh for each, polls for completion.
+#
+# Usage: run-parallel-acpx.sh <config_file> <REVIEW_ID> [reviewer1,reviewer2,...]
+#   config_file — path to JSON config (e.g. ~/.claude/debate-acpx.json)
+#   REVIEW_ID   — 8-char hex ID (work dir: .claude/tmp/ai-review-<ID>)
+#   reviewers   — optional comma-separated list; defaults to all from config
+
+CONFIG_FILE="${1:-}"
+REVIEW_ID="${2:-}"
+REVIEWER_LIST="${3:-}"
+
+if [ -z "$CONFIG_FILE" ] || [ -z "$REVIEW_ID" ]; then
+  echo "Usage: $0 <config_file> <REVIEW_ID> [reviewer1,reviewer2,...]" >&2
+  exit 1
+fi
+
+# Sanitize REVIEW_ID
+if ! [[ "$REVIEW_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "[debate] Invalid REVIEW_ID: must be alphanumeric/dashes/underscores only" >&2
+  exit 1
+fi
+
+WORK_DIR=".claude/tmp/ai-review-${REVIEW_ID}"
+
+# Note: $() triggers permission prompts in Claude Code, but this script runs
+# via nohup/disown outside the sandbox, so it's fine here.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+mkdir -p "$WORK_DIR" || { echo "Failed to create $WORK_DIR" >&2; exit 1; }
+
+if [ ! -f "$WORK_DIR/plan.md" ]; then
+  echo "[debate] plan.md not found in $WORK_DIR — nothing to review" >&2
+  exit 1
+fi
+
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "Config not found: $CONFIG_FILE" >&2
+  exit 1
+fi
+
+# Get reviewer names: CLI arg or all from config
+if [ -n "$REVIEWER_LIST" ]; then
+  IFS=',' read -ra REVIEWERS <<< "$REVIEWER_LIST"
+else
+  REVIEWERS=()
+  while IFS= read -r line; do
+    REVIEWERS+=("$line")
+  done < <(jq -r '.reviewers | keys[]' "$CONFIG_FILE")
+fi
+
+if [ ${#REVIEWERS[@]} -eq 0 ]; then
+  echo "[debate] No reviewers configured in $CONFIG_FILE" >&2
+  exit 1
+fi
+
+EXIT_FILES=()
+
+for NAME in "${REVIEWERS[@]}"; do
+  AGENT=$(jq -r --arg name "$NAME" '.reviewers[$name].agent // empty' "$CONFIG_FILE")
+  if [ -z "$AGENT" ]; then
+    echo "[debate] Skipping $NAME — no agent in config" >&2
+    continue
+  fi
+
+  TIMEOUT=$(jq -r --arg name "$NAME" '.reviewers[$name].timeout // 120' "$CONFIG_FILE")
+
+  echo "[debate] Spawning $NAME ($AGENT, timeout: ${TIMEOUT}s)..." >&2
+  rm -f "$WORK_DIR/${NAME}-exit.txt"
+  nohup bash "$SCRIPT_DIR/invoke-acpx.sh" "$CONFIG_FILE" "$WORK_DIR" "$NAME" "$TIMEOUT" \
+    > /dev/null 2>&1 &
+  disown $!
+  EXIT_FILES+=("$WORK_DIR/${NAME}-exit.txt")
+done
+
+if [ ${#EXIT_FILES[@]} -eq 0 ]; then
+  echo "[debate] No reviewers spawned." >&2
+  exit 1
+fi
+
+echo "[debate] Waiting for ${#EXIT_FILES[@]} reviewer(s)..." >&2
+
+POLL_INTERVAL=2
+ELAPSED=0
+MAX_WAIT="${POLL_MAX_WAIT:-450}"
+
+while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
+  DONE=0
+  for f in "${EXIT_FILES[@]}"; do
+    [ -f "$f" ] && DONE=$((DONE + 1))
+  done
+  if [ "$DONE" -ge "${#EXIT_FILES[@]}" ]; then
+    break
+  fi
+  sleep "$POLL_INTERVAL"
+  ELAPSED=$((ELAPSED + POLL_INTERVAL))
+done
+
+if [ "$ELAPSED" -ge "$MAX_WAIT" ]; then
+  echo "[debate] Timed out waiting for reviewers after ${MAX_WAIT}s." >&2
+  rm -f "$WORK_DIR"/*-prompt.txt
+  exit 1
+else
+  echo "[debate] All reviewers complete (${ELAPSED}s elapsed)." >&2
+fi
+
+# Aggregate exit codes
+WORST_EXIT=0
+for f in "${EXIT_FILES[@]}"; do
+  if [ -f "$f" ]; then
+    CODE=$(cat "$f" 2>/dev/null)
+    if [[ "$CODE" =~ ^[0-9]+$ ]]; then
+      [ "$CODE" -gt "$WORST_EXIT" ] && WORST_EXIT="$CODE"
+    else
+      echo "[debate] Warning: non-numeric exit code in $f: '$CODE'" >&2
+      [ "$WORST_EXIT" -eq 0 ] && WORST_EXIT=1
+    fi
+  else
+    WORST_EXIT=1
+  fi
+done
+
+rm -f "$WORK_DIR"/*-prompt.txt
+
+exit "$WORST_EXIT"

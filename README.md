@@ -100,29 +100,117 @@ Restart Claude Code after installing.
 
 ## Prerequisites
 
-1. **acpx** — the unified CLI for communicating with coding agents
+1. **acpx** — the unified CLI for communicating with coding agents via the [Agent Client Protocol](https://github.com/openclaw/acpx)
    ```bash
    npm install -g acpx@latest
    ```
 
-2. **jq** — JSON processing
+2. **jq** — JSON processing (used by config parsing)
    ```bash
    brew install jq          # macOS
    apt install jq           # Linux
    ```
 
-3. **Agent CLIs** — install the agents you want to use as reviewers. acpx auto-downloads adapters on first use, but the underlying agents must be installed separately:
+3. **Agent CLIs** — install the agents you want to use as reviewers. acpx auto-downloads ACP adapters on first use, but the underlying agent CLIs must be installed separately.
 
-   | Agent | Install |
-   |-------|---------|
-   | codex | `npm install -g @openai/codex` + set `OPENAI_API_KEY` |
-   | gemini | `npm install -g @google/gemini-cli` + run `gemini auth` |
-   | claude | Already installed (part of Claude Code) |
-   | kimi | `npm install -g @anthropic-ai/kimi-cli` |
-   | cursor | Install Cursor IDE |
-   | copilot | `gh extension install github/gh-copilot` |
+Run `/debate:setup` to check everything at once, or `/debate:acpx-setup` for interactive setup.
 
-Run `/debate:setup` to check everything at once.
+## Setting Up Providers
+
+Each reviewer in your config maps to an **acpx agent**, which wraps a coding agent CLI. You need to install and authenticate each agent you want to use.
+
+### OpenAI Codex
+
+```bash
+npm install -g @openai/codex
+export OPENAI_API_KEY=sk-...    # add to ~/.bashrc, ~/.zshrc, or ~/.config/fish/config.fish
+```
+
+Verify: `codex --version`
+
+Config entry:
+```json
+"codex": { "agent": "codex", "timeout": 120, "system_prompt": "You are The Executor — a pragmatic runtime tracer focused on shell correctness, exit codes, race conditions, and file I/O." }
+```
+
+### Google Gemini
+
+```bash
+npm install -g @google/gemini-cli
+gemini auth
+```
+
+Verify: `echo "PONG" | gemini -s -e ""`
+
+Config entry:
+```json
+"gemini": { "agent": "gemini", "timeout": 240, "system_prompt": "You are The Architect — a systems architect reviewing for structural integrity, over-engineering, missing phases, and graceful degradation." }
+```
+
+### Claude (Opus)
+
+Already installed if you're running Claude Code. No additional setup needed.
+
+Config entry:
+```json
+"opus": { "agent": "claude", "timeout": 300, "system_prompt": "You are The Skeptic — a devil's advocate focused on unstated assumptions, unhappy paths, second-order failures, and security." }
+```
+
+Note: if you're running this plugin **inside** Claude, adding `claude` as a reviewer means Claude reviews its own plan. This can still be useful (different persona, fresh context), but for independent perspectives, prefer non-Claude agents.
+
+### Kimi
+
+```bash
+# See https://github.com/anthropics/kimi-cli for install instructions
+```
+
+Config entry:
+```json
+"kimi": { "agent": "kimi", "timeout": 120 }
+```
+
+### Kiro
+
+```bash
+# See https://github.com/aws/kiro for install instructions
+```
+
+Config entry:
+```json
+"kiro": { "agent": "kiro", "timeout": 120 }
+```
+
+### Qwen Code
+
+```bash
+# See https://github.com/QwenLM/qwen-code for install instructions
+```
+
+Config entry:
+```json
+"qwen": { "agent": "qwen", "timeout": 120 }
+```
+
+### Other agents
+
+acpx supports many more agents: cursor, copilot, opencode, kilocode, droid, iflow, pi, openclaw. See the [acpx docs](https://github.com/openclaw/acpx) for the full list and install instructions.
+
+### Custom agents
+
+acpx supports custom ACP servers via config. Add to `~/.acpx/config.json`:
+
+```json
+{
+  "agents": {
+    "my-agent": { "command": "./bin/my-acp-server" }
+  }
+}
+```
+
+Then use it in your debate config:
+```json
+"my-reviewer": { "agent": "my-agent", "timeout": 120 }
+```
 
 ## Config
 
@@ -201,6 +289,10 @@ Install GNU coreutils: `brew install coreutils` (macOS). Reviews will still work
 
 **Empty response from reviewer**
 The agent returned no content. Check `<work_dir>/<reviewer>-stderr.log` for error details.
+
+## Migrating from v1.x
+
+If you're upgrading from v1.x (CLI mode, LiteLLM, or OpenRouter), see [MIGRATING.md](MIGRATING.md) for a complete guide covering config migration, removed commands, and settings.json changes.
 
 ## Security
 

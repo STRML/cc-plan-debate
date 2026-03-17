@@ -1,6 +1,6 @@
 ---
 description: Run ALL configured AI reviewers in parallel via acpx, synthesize feedback, debate contradictions, and produce a consensus verdict. Configure reviewers in ~/.claude/debate-acpx.json.
-allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-acpx.sh:*), Bash(rm -rf .tmp/ai-review-:*), Write(.tmp/ai-review-*), TeamCreate, TeamDelete, SendMessage, Agent
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-acpx.sh:*), Bash(rm -rf .tmp/ai-review-:*), Write(.tmp/ai-review-*), ToolSearch, TeamCreate, TeamDelete, SendMessage, Agent
 ---
 
 # AI Multi-Model Plan Review (acpx)
@@ -62,7 +62,7 @@ If there is no plan in context, ask the user to paste it or describe what to rev
 ### 1e. Execution Mode
 
 **First, fetch the TeamCreate tool schema** — it's a deferred tool that must be loaded before use:
-```
+```text
 ToolSearch: query="select:TeamCreate,TeamDelete,SendMessage", max_results=3
 ```
 
@@ -71,7 +71,7 @@ If ToolSearch returns TeamCreate, it is available. If it returns nothing or erro
 **If `TeamCreate` is available:**
 
 Attempt to create the review team:
-```
+```text
 TeamCreate: name="acpx-<REVIEW_ID>", description="Parallel acpx plan review"
 ```
 
@@ -95,7 +95,7 @@ The review team was created in Step 1e and persists for the full session. Do NOT
 For each reviewer in the config, use the Agent tool with `team_name: "acpx-<REVIEW_ID>"`. Spawn all in parallel.
 
 Agent `name`: `<reviewer-name>-reviewer`
-```
+```text
 Your job is to call an external AI reviewer via acpx. Do NOT write the review yourself.
 
 Run this command (use timeout: 360000 on the Bash call):
@@ -117,7 +117,7 @@ Wait for `SendMessage` from all reviewer agents. When all have reported (or 360s
 
 For each reviewer, first write revision-aware prompt to `<WORK_DIR>/<name>-prompt.txt`, then send:
 
-```
+```text
 SendMessage:
   Recipient: "<name>-reviewer"
   Content:
@@ -230,7 +230,7 @@ DEBATE_EOF
 Then invoke each debating reviewer:
 
 **Team mode:** SendMessage the teammate:
-```
+```text
 SendMessage:
   Recipient: "<name>-reviewer"
   Content:
@@ -343,7 +343,7 @@ Review complete.
 ## Step 9: Cleanup
 
 In team mode, shut down the review team first:
-```
+```text
 TeamDelete
 ```
 

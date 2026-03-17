@@ -35,7 +35,7 @@ After installing, re-run /debate:opus-review.
 ## Step 1: Setup
 
 If `~/.claude/debate-scripts` does not exist, stop and display:
-```
+```text
 ~/.claude/debate-scripts not found.
 Run /debate:setup first to create the stable scripts symlink.
 ```
@@ -61,11 +61,11 @@ Write a temporary single-reviewer config to `<WORK_DIR>/opus-config.json`:
 
 Key files in `WORK_DIR`: `plan.md`, `opus-output.md`, `opus-exit.txt`
 
-**Cleanup:** If any step fails or the user interrupts, always run `rm -rf .tmp/ai-review-${REVIEW_ID}` before stopping.
+**Cleanup:** If any step fails or the user interrupts, always run `rm -rf <WORK_DIR>` before stopping.
 
 ## Step 2: Capture the Plan
 
-1. Write the full plan content to `.tmp/ai-review-${REVIEW_ID}/plan.md`
+1. Write the full plan content to `<WORK_DIR>/plan.md`
 2. If there is no plan in the current context, ask the user what they want reviewed
 
 ## Step 3: Initial Review (Round 1)
@@ -82,7 +82,7 @@ The script writes the review to `opus-output.md`.
 
 ## Step 4: Read Review & Check Verdict
 
-1. Read `.tmp/ai-review-${REVIEW_ID}/opus-output.md`
+1. Read `<WORK_DIR>/opus-output.md`
 2. Present Opus's review:
 
 ```text
@@ -101,11 +101,11 @@ The script writes the review to `opus-output.md`.
 
 Based on Opus's feedback:
 
-1. **Revise the plan** — address each issue Opus raised. Update the plan content in the conversation context and rewrite `.tmp/ai-review-${REVIEW_ID}/plan.md` with the revised version.
+1. **Revise the plan** — address each issue Opus raised. Update the plan content in the conversation context and rewrite `<WORK_DIR>/plan.md` with the revised version.
 2. **Write the revision summary to a file** (never compose this inline in a shell string):
 
 ```bash
-cat > .tmp/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
+cat > <WORK_DIR>/revisions.txt << 'EOF'
 [Write the revision bullets here before closing the heredoc]
 EOF
 ```
@@ -176,11 +176,11 @@ If max rounds were reached without approval:
 
 Then display the final plan so it persists in the conversation context after cleanup:
 
-```
+```text
 ---
 ## Final Plan
 
-[full content of .tmp/ai-review-${REVIEW_ID}/plan.md]
+[full content of <WORK_DIR>/plan.md]
 
 ---
 Review complete. Clear context and implement this plan, or save it elsewhere first.
@@ -189,7 +189,7 @@ Review complete. Clear context and implement this plan, or save it elsewhere fir
 ## Step 8: Cleanup
 
 ```bash
-rm -rf .tmp/ai-review-${REVIEW_ID}
+rm -rf <WORK_DIR>
 ```
 
 ## Loop Summary

@@ -121,6 +121,9 @@ if command -v timeout > /dev/null 2>&1; then
   TIMEOUT_BIN="timeout"
 elif command -v gtimeout > /dev/null 2>&1; then
   TIMEOUT_BIN="gtimeout"
+else
+  echo "[$REVIEWER] WARNING: neither timeout nor gtimeout found — running without timeout enforcement" >&2
+  echo "  Install: brew install coreutils (macOS) / apt install coreutils (Linux)" >&2
 fi
 
 # --- acpx call ---

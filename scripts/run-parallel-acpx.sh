@@ -56,6 +56,7 @@ if [ ${#REVIEWERS[@]} -eq 0 ]; then
 fi
 
 EXIT_FILES=()
+PIDS=()
 
 for NAME in "${REVIEWERS[@]}"; do
   AGENT=$(jq -r --arg name "$NAME" '.reviewers[$name].agent // empty' "$CONFIG_FILE")
@@ -70,7 +71,8 @@ for NAME in "${REVIEWERS[@]}"; do
   rm -f "$WORK_DIR/${NAME}-exit.txt"
   nohup bash "$SCRIPT_DIR/invoke-acpx.sh" "$CONFIG_FILE" "$WORK_DIR" "$NAME" "$TIMEOUT" \
     > /dev/null 2>&1 &
-  disown $!
+  PIDS+=("$!")
+  disown "${PIDS[-1]}"
   EXIT_FILES+=("$WORK_DIR/${NAME}-exit.txt")
 done
 
@@ -98,7 +100,14 @@ while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
 done
 
 if [ "$ELAPSED" -ge "$MAX_WAIT" ]; then
-  echo "[debate] Timed out waiting for reviewers after ${MAX_WAIT}s." >&2
+  echo "[debate] Timed out waiting for reviewers after ${MAX_WAIT}s. Killing orphaned processes..." >&2
+  for pid in "${PIDS[@]}"; do
+    # Kill the process group first (catches children), then the process itself
+    kill -- -"$pid" 2>/dev/null || true
+    kill "$pid" 2>/dev/null || true
+  done
+  # Brief wait for processes to exit
+  sleep 1
   rm -f "$WORK_DIR"/*-prompt.txt
   exit 1
 else

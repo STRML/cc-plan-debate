@@ -26,7 +26,7 @@ Restart Claude Code after installing.
 
 ## What it does
 
-```
+```text
 You: /debate:all
 
 Claude: Launching parallel review via acpx...
@@ -83,7 +83,7 @@ Claude: Sending revised plan back to all reviewers...
 
 ### From GitHub
 
-```
+```bash
 /plugin marketplace add STRML/cc-debate
 /plugin install debate@cc-debate
 ```
@@ -261,7 +261,7 @@ See [acpx docs](https://github.com/openclaw/acpx) for the full list.
 
 Runs all configured reviewers in parallel via acpx. If reviewers disagree, Claude sends targeted questions back to each one to resolve contradictions. Iterates up to 3 revision rounds.
 
-```
+```bash
 /debate:all                    # all configured reviewers
 /debate:all codex,gemini       # specific reviewers only
 /debate:all skip-debate        # skip debate, straight to report

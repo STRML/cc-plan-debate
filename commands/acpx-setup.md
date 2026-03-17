@@ -9,25 +9,30 @@ Verify acpx prerequisites and print everything needed for `/debate:all`.
 
 ---
 
-## Step 1: Check tools
+## Step 1: Check tools and set ACPX_CMD
 
 ```bash
 which acpx || which npx
 which jq
 ```
 
+Determine the acpx invocation command:
+- If `acpx` is found: set `ACPX_CMD=acpx`
+- If `acpx` is not found but `npx` is: set `ACPX_CMD="npx acpx@latest"`
+- If neither: stop with error
+
 Report:
 ```text
 ## debate — acpx Setup Check
 
 ### Tools
-  ✅ acpx   found at /path/to/acpx
+  ✅ acpx   found at /path/to/acpx (using: acpx)
   ✅ jq     found at /path/to/jq
 ```
 
 If `acpx` is not found but `npx` is:
 ```text
-  ⚠️  acpx not installed globally — will use npx acpx@latest (slower first run)
+  ⚠️  acpx not installed globally — using: npx acpx@latest (slower first run)
      Install globally: npm install -g acpx@latest
 ```
 
@@ -36,7 +41,7 @@ If neither `acpx` nor `npx`:
   ❌ acpx not found. Install: npm install -g acpx@latest
 ```
 
-Both `acpx` (or `npx`) and `jq` are required.
+Both `acpx` (or `npx`) and `jq` are required. Use `ACPX_CMD` for all subsequent acpx invocations in this command.
 
 ## Step 2: Check config file
 
@@ -101,7 +106,7 @@ Set timeout to 240-300 for larger/slower agents, 120 for faster ones.
 For each configured reviewer, run a quick test:
 
 ```bash
-echo "Reply with only the word PONG." | acpx --format quiet --approve-reads --timeout 30 <agent>
+echo "Reply with only the word PONG." | $ACPX_CMD --format quiet --approve-reads --timeout 30 <agent>
 ```
 
 Report:

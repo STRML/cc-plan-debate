@@ -17,7 +17,7 @@ which acpx || which npx
 
 Report:
 
-```
+```text
 ## debate — Setup Check
 
 ### acpx CLI
@@ -77,7 +77,7 @@ Note: Re-run `/debate:setup` after updating the plugin to refresh this symlink.
 
 Print the complete list of Bash tool patterns needed for fully unattended operation (no approval prompts):
 
-```
+```text
 ### Permission Allowlist
 
 To run /debate:all and /debate:opus-review without any approval prompts,
@@ -102,7 +102,7 @@ add the following to ~/.claude/settings.json:
 }
 ```
 
-```
+```text
 NOTE: These patterns are already declared in the allowed-tools frontmatter of
 each command, so each individual session will prompt once and remember within
 that session. Adding to settings.json makes approval permanent across all sessions.
@@ -110,7 +110,7 @@ that session. Adding to settings.json makes approval permanent across all sessio
 
 ## Step 6: Print final status
 
-```
+```text
 ### Summary
 
   acpx:    ✅ ready

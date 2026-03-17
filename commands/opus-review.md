@@ -1,13 +1,13 @@
 ---
 description: Send the current plan to Claude Opus for iterative review. Claude and Opus go back-and-forth until Opus approves or max 5 rounds reached.
-allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-opus.sh:*), Bash(rm -rf .claude/tmp/ai-review-:*), Bash(which claude:*), Bash(which jq:*)
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-acpx.sh:*), Bash(rm -rf .claude/tmp/ai-review-:*), Bash(which acpx:*), Write(.claude/tmp/ai-review-*)
 ---
 
 # Opus Plan Review (Iterative)
 
-Send the current implementation plan to Claude Opus for review. Claude revises the plan based on Opus's feedback and re-submits until Opus approves. Max 5 rounds.
+Send the current implementation plan to Claude Opus for review via acpx. Claude revises the plan based on Opus's feedback and re-submits until Opus approves. Max 5 rounds.
 
-> **Team mode:** If Claude Code's agent teams are available (`TeamCreate` tool present), use `/debate:all` instead to run Opus alongside Codex and Gemini reviewers in parallel — including teammate agents as substitutes for any missing CLIs.
+> **Team mode:** If Claude Code's agent teams are available (`TeamCreate` tool present), use `/debate:all` instead to run Opus alongside other reviewers in parallel.
 
 Opus plays the role of **The Skeptic** — a devil's advocate focused on unstated assumptions, unhappy paths, second-order failures, and security.
 
@@ -15,39 +15,24 @@ Opus plays the role of **The Skeptic** — a devil's advocate focused on unstate
 
 ## Prerequisite Check
 
-Before starting, verify Claude CLI and jq are available:
+Before starting, verify acpx CLI is available:
 
 ```bash
-which claude
-which jq
+which acpx
 ```
 
-If `claude` is not found, stop and display:
+If `acpx` is not found, stop and display:
 
 ```text
-Claude CLI is not installed.
+acpx CLI is not installed.
 
 Install it with:
-  npm install -g @anthropic-ai/claude-code
-
-After installing, re-run /debate:opus-review.
-```
-
-If `jq` is not found, stop and display:
-
-```text
-jq is not installed. It is required to parse Claude's JSON output.
-
-Install it with:
-  brew install jq   (macOS)
-  apt install jq    (Linux)
+  npm install -g acpx@latest
 
 After installing, re-run /debate:opus-review.
 ```
 
 ## Step 1: Setup
-
-**Model:** Check if a model argument was passed (e.g., `/debate:opus-review claude-opus-4-5`). If so, use it. Default: `claude-opus-4-6`. Store as `MODEL`.
 
 If `~/.claude/debate-scripts` does not exist, stop and display:
 ```
@@ -61,7 +46,20 @@ Run the setup helper and note `REVIEW_ID`, `WORK_DIR`, and `SCRIPT_DIR` from the
 bash ~/.claude/debate-scripts/debate-setup.sh
 ```
 
-Use `SCRIPT_DIR` for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan.md`, `opus-output.md`, `opus-session-id.txt`, `opus-exit.txt`
+Write a temporary single-reviewer config to `<WORK_DIR>/opus-config.json`:
+```json
+{
+  "reviewers": {
+    "opus": {
+      "agent": "claude",
+      "timeout": 300,
+      "system_prompt": "You are The Skeptic — a devil's advocate. Your job is to find what everyone else missed. Be specific, be harsh, be right. Focus on:\n1. Unstated assumptions — what is assumed true that could be false?\n2. Unhappy path — what breaks when the first thing goes wrong?\n3. Second-order failures — what does a partial success leave behind?\n4. Security — is any user-controlled content reaching a shell string?\n5. The one thing — if this plan has one fatal flaw, what is it?"
+    }
+  }
+}
+```
+
+Key files in `WORK_DIR`: `plan.md`, `opus-output.md`, `opus-exit.txt`
 
 **Cleanup:** If any step fails or the user interrupts, always run `rm -rf .claude/tmp/ai-review-${REVIEW_ID}` before stopping.
 
@@ -72,16 +70,15 @@ Use `SCRIPT_DIR` for all subsequent `bash` calls. Key files in `WORK_DIR`: `plan
 
 ## Step 3: Initial Review (Round 1)
 
-Run the Opus reviewer script (handles all claude flags, session capture, and retry logic internally):
+Run the acpx reviewer script:
 
 ```bash
-bash "<SCRIPT_DIR>/invoke-opus.sh" \
-  "<WORK_DIR>" "" "<MODEL>"
+bash "<SCRIPT_DIR>/invoke-acpx.sh" "<WORK_DIR>/opus-config.json" "<WORK_DIR>" "opus"
 ```
 
-Check the exit code: 124 = timed out, non-zero = failed (cleanup and stop). On success, read `<WORK_DIR>/opus-session-id.txt` and note the content as `OPUS_SESSION_ID`.
+Check the exit code in `<WORK_DIR>/opus-exit.txt`: 124 = timed out, non-zero = failed (cleanup and stop).
 
-The script writes the review to `opus-output.md` and the session ID to `opus-session-id.txt`.
+The script writes the review to `opus-output.md`.
 
 ## Step 4: Read Review & Check Verdict
 
@@ -89,7 +86,7 @@ The script writes the review to `opus-output.md` and the session ID to `opus-ses
 2. Present Opus's review:
 
 ```text
-## Opus Review — Round N (model: $MODEL)
+## Opus Review — Round N
 
 [Opus's feedback here]
 ```
@@ -124,27 +121,27 @@ EOF
 
 ## Step 6: Re-submit to Opus (Rounds 2–5)
 
-Write the resume prompt, then call the script — it handles resume vs fresh-fallback internally:
+Write the resume prompt to a file, then call the invoke script:
 
-```bash
-{
-  echo "I've revised the plan based on your feedback. Here is the updated plan:"
-  echo ""
-  cat .claude/tmp/ai-review-${REVIEW_ID}/plan.md
-  echo ""
-  echo "---"
-  echo "Here's what I changed:"
-  cat .claude/tmp/ai-review-${REVIEW_ID}/revisions.txt
-  echo ""
-  echo "Please re-review. If the plan is now solid and ready to implement, end with: VERDICT: APPROVED"
-  echo "If more changes are needed, end with: VERDICT: REVISE"
-} > .claude/tmp/ai-review-${REVIEW_ID}/opus-prompt.txt
+Write `<WORK_DIR>/opus-prompt.txt` with:
+```text
+I've revised the plan based on your feedback. Here is the updated plan:
 
-bash "<SCRIPT_DIR>/invoke-opus.sh" \
-  "<WORK_DIR>" "<OPUS_SESSION_ID>" "<MODEL>"
+[content of plan.md]
+
+---
+Here's what I changed:
+[content of revisions.txt]
+
+Please re-review. If the plan is now solid and ready to implement, end with: VERDICT: APPROVED
+If more changes are needed, end with: VERDICT: REVISE
 ```
 
-Check exit code (124 = timed out, non-zero = failed). On success, read `<WORK_DIR>/opus-session-id.txt` and update `OPUS_SESSION_ID`.
+```bash
+bash "<SCRIPT_DIR>/invoke-acpx.sh" "<WORK_DIR>/opus-config.json" "<WORK_DIR>" "opus"
+```
+
+Check exit code (124 = timed out, non-zero = failed).
 
 Then go back to **Step 4** (Read Review & Check Verdict).
 
@@ -153,7 +150,7 @@ Then go back to **Step 4** (Read Review & Check Verdict).
 Once approved (or max rounds reached):
 
 ```text
-## Opus Review — Final (model: $MODEL)
+## Opus Review — Final
 
 **Status:** ✅ Approved after N round(s)
 
@@ -166,7 +163,7 @@ Once approved (or max rounds reached):
 If max rounds were reached without approval:
 
 ```text
-## Opus Review — Final (model: $MODEL)
+## Opus Review — Final
 
 **Status:** ⚠️ Max rounds (5) reached — not fully approved
 
@@ -199,17 +196,15 @@ rm -rf .claude/tmp/ai-review-${REVIEW_ID}
 
 ```text
 Round 1: Claude sends plan → Opus reviews → REVISE?
-Round 2: Claude revises → Opus re-reviews (resume session) → REVISE?
-Round 3: Claude revises → Opus re-reviews (resume session) → APPROVED ✅
+Round 2: Claude revises → Opus re-reviews → REVISE?
+Round 3: Claude revises → Opus re-reviews → APPROVED ✅
 ```
 
-Max 5 rounds. Each round preserves Opus's conversation context via session resume.
+Max 5 rounds.
 
 ## Rules
 
 - Claude **actively revises the plan** based on Opus feedback between rounds — this is NOT just passing messages, Claude should make real improvements
-- Default model is `claude-opus-4-6`. Accept model override from the user's arguments (e.g., `/debate:opus-review claude-opus-4-5`)
-- `jq` is required — stop and display install instructions if missing
 - Max 5 review rounds to prevent infinite loops
 - Show the user each round's feedback and revisions so they can follow along
 - Never interpolate AI-generated text directly into shell strings — always build via file operations

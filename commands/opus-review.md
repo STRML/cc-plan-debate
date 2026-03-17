@@ -1,6 +1,6 @@
 ---
 description: Send the current plan to Claude Opus for iterative review. Claude and Opus go back-and-forth until Opus approves or max 5 rounds reached.
-allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-acpx.sh:*), Bash(rm -rf .claude/tmp/ai-review-:*), Bash(which acpx:*), Write(.claude/tmp/ai-review-*)
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-acpx.sh:*), Bash(rm -rf .tmp/ai-review-:*), Bash(which acpx:*), Write(.tmp/ai-review-*)
 ---
 
 # Opus Plan Review (Iterative)
@@ -61,11 +61,11 @@ Write a temporary single-reviewer config to `<WORK_DIR>/opus-config.json`:
 
 Key files in `WORK_DIR`: `plan.md`, `opus-output.md`, `opus-exit.txt`
 
-**Cleanup:** If any step fails or the user interrupts, always run `rm -rf .claude/tmp/ai-review-${REVIEW_ID}` before stopping.
+**Cleanup:** If any step fails or the user interrupts, always run `rm -rf .tmp/ai-review-${REVIEW_ID}` before stopping.
 
 ## Step 2: Capture the Plan
 
-1. Write the full plan content to `.claude/tmp/ai-review-${REVIEW_ID}/plan.md`
+1. Write the full plan content to `.tmp/ai-review-${REVIEW_ID}/plan.md`
 2. If there is no plan in the current context, ask the user what they want reviewed
 
 ## Step 3: Initial Review (Round 1)
@@ -82,7 +82,7 @@ The script writes the review to `opus-output.md`.
 
 ## Step 4: Read Review & Check Verdict
 
-1. Read `.claude/tmp/ai-review-${REVIEW_ID}/opus-output.md`
+1. Read `.tmp/ai-review-${REVIEW_ID}/opus-output.md`
 2. Present Opus's review:
 
 ```text
@@ -101,11 +101,11 @@ The script writes the review to `opus-output.md`.
 
 Based on Opus's feedback:
 
-1. **Revise the plan** — address each issue Opus raised. Update the plan content in the conversation context and rewrite `.claude/tmp/ai-review-${REVIEW_ID}/plan.md` with the revised version.
+1. **Revise the plan** — address each issue Opus raised. Update the plan content in the conversation context and rewrite `.tmp/ai-review-${REVIEW_ID}/plan.md` with the revised version.
 2. **Write the revision summary to a file** (never compose this inline in a shell string):
 
 ```bash
-cat > .claude/tmp/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
+cat > .tmp/ai-review-${REVIEW_ID}/revisions.txt << 'EOF'
 [Write the revision bullets here before closing the heredoc]
 EOF
 ```
@@ -180,7 +180,7 @@ Then display the final plan so it persists in the conversation context after cle
 ---
 ## Final Plan
 
-[full content of .claude/tmp/ai-review-${REVIEW_ID}/plan.md]
+[full content of .tmp/ai-review-${REVIEW_ID}/plan.md]
 
 ---
 Review complete. Clear context and implement this plan, or save it elsewhere first.
@@ -189,7 +189,7 @@ Review complete. Clear context and implement this plan, or save it elsewhere fir
 ## Step 8: Cleanup
 
 ```bash
-rm -rf .claude/tmp/ai-review-${REVIEW_ID}
+rm -rf .tmp/ai-review-${REVIEW_ID}
 ```
 
 ## Loop Summary

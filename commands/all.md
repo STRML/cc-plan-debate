@@ -1,6 +1,6 @@
 ---
 description: Run ALL configured AI reviewers in parallel via acpx, synthesize feedback, debate contradictions, and produce a consensus verdict. Configure reviewers in ~/.claude/debate-acpx.json.
-allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-acpx.sh:*), Bash(rm -rf .claude/tmp/ai-review-:*), Write(.claude/tmp/ai-review-*), TeamCreate, TeamDelete, SendMessage, Agent
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-acpx.sh:*), Bash(rm -rf .tmp/ai-review-:*), Write(.tmp/ai-review-*), TeamCreate, TeamDelete, SendMessage, Agent
 ---
 
 # AI Multi-Model Plan Review (acpx)
@@ -351,7 +351,7 @@ If `TeamDelete` fails, log a warning and continue.
 
 Then remove temp files:
 ```bash
-rm -rf .claude/tmp/ai-review-${REVIEW_ID}
+rm -rf .tmp/ai-review-${REVIEW_ID}
 ```
 
 ---

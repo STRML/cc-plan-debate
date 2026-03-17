@@ -133,10 +133,10 @@ To run /debate:all without approval prompts, add to ~/.claude/settings.json:
       "Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*)",
       "Bash(bash ~/.claude/debate-scripts/run-parallel-acpx.sh:*)",
       "Bash(bash ~/.claude/debate-scripts/invoke-acpx.sh:*)",
-      "Bash(rm -rf .claude/tmp/ai-review-:*)",
-      "Read(.claude/tmp/ai-review*)",
-      "Edit(.claude/tmp/ai-review*)",
-      "Write(.claude/tmp/ai-review*)"
+      "Bash(rm -rf .tmp/ai-review-:*)",
+      "Read(.tmp/ai-review*)",
+      "Edit(.tmp/ai-review*)",
+      "Write(.tmp/ai-review*)"
     ]
   }
 }

@@ -4,7 +4,7 @@
 #
 # Usage: run-parallel-acpx.sh <config_file> <REVIEW_ID> [reviewer1,reviewer2,...]
 #   config_file — path to JSON config (e.g. ~/.claude/debate-acpx.json)
-#   REVIEW_ID   — 8-char hex ID (work dir: .claude/tmp/ai-review-<ID>)
+#   REVIEW_ID   — 8-char hex ID (work dir: .tmp/ai-review-<ID>)
 #   reviewers   — optional comma-separated list; defaults to all from config
 
 CONFIG_FILE="${1:-}"
@@ -22,7 +22,7 @@ if ! [[ "$REVIEW_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   exit 1
 fi
 
-WORK_DIR=".claude/tmp/ai-review-${REVIEW_ID}"
+WORK_DIR=".tmp/ai-review-${REVIEW_ID}"
 
 # Note: $() triggers permission prompts in Claude Code, but this script runs
 # via nohup/disown outside the sandbox, so it's fine here.

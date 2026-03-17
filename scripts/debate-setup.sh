@@ -7,14 +7,14 @@
 #
 # Output (stdout, key=value):
 #   REVIEW_ID=<8-char hex>
-#   WORK_DIR=<CWD>/.claude/tmp/ai-review-<REVIEW_ID>
+#   WORK_DIR=<CWD>/.tmp/ai-review-<REVIEW_ID>
 #   SCRIPT_DIR=<stable symlink ~/.claude/debate-scripts, or this script's own dir>
 
 REVIEW_ID=$(uuidgen | tr '[:upper:]' '[:lower:]' | head -c 8)
 
-# Use .claude/tmp/ inside the project directory so all reads/writes stay
-# within the CWD sandbox allowlist — avoids permission prompts for /tmp paths.
-WORK_DIR="${PWD}/.claude/tmp/ai-review-${REVIEW_ID}"
+# Use .tmp/ inside the project directory — avoids permission prompts for
+# writing to .claude/ ("editing own settings") or /tmp paths.
+WORK_DIR="${PWD}/.tmp/ai-review-${REVIEW_ID}"
 
 mkdir -p "$WORK_DIR" || { echo "ERROR: failed to create $WORK_DIR" >&2; exit 1; }
 

@@ -27,10 +27,9 @@ run_test() {
 
 test_no_old_invoke_refs() {
   # Should not reference deleted invoke scripts in active files.
-  # Exclude comments (lines starting with #) — the new script's header legitimately
-  # mentions what it replaces.
+  # Exclude setup.md (migration detection) and script comments.
   local found
-  found=$(grep -rl "invoke-codex\|invoke-gemini\|invoke-opus\.sh\|invoke-openai-compat" \
+  found=$(grep -rl --exclude=setup.md "invoke-codex\|invoke-gemini\|invoke-opus\.sh\|invoke-openai-compat" \
     "$PROJECT_DIR/commands" "$PROJECT_DIR/README.md" \
     2>/dev/null || true)
   # For scripts dir, check only non-comment lines
@@ -45,17 +44,19 @@ test_no_old_invoke_refs() {
 }
 
 test_no_old_parallel_refs() {
+  # Exclude setup.md (migration detection)
   local found
-  found=$(grep -rl "run-parallel\.sh\|run-parallel-openai-compat" \
+  found=$(grep -rl --exclude=setup.md "run-parallel\.sh\|run-parallel-openai-compat" \
     "$PROJECT_DIR/commands" "$PROJECT_DIR/scripts" "$PROJECT_DIR/README.md" \
     2>/dev/null || true)
   [ -z "$found" ] || { echo "  Found in: $found"; return 1; }
 }
 
 test_no_old_config_refs() {
-  # Active commands/scripts should not reference old config files
+  # Active commands/scripts should not reference old config files.
+  # Exclude setup.md (migration detection)
   local found
-  found=$(grep -rl "debate-litellm\.json\|debate-openrouter\.json" \
+  found=$(grep -rl --exclude=setup.md "debate-litellm\.json\|debate-openrouter\.json" \
     "$PROJECT_DIR/commands" "$PROJECT_DIR/scripts" \
     2>/dev/null || true)
   [ -z "$found" ] || { echo "  Found in: $found"; return 1; }
@@ -71,8 +72,9 @@ test_no_old_command_refs_in_active_files() {
 }
 
 test_no_probe_model_refs() {
+  # Exclude setup.md (migration detection)
   local found
-  found=$(grep -rl "probe-model" \
+  found=$(grep -rl --exclude=setup.md "probe-model" \
     "$PROJECT_DIR/commands" "$PROJECT_DIR/scripts" \
     2>/dev/null || true)
   [ -z "$found" ] || { echo "  Found in: $found"; return 1; }
@@ -80,8 +82,9 @@ test_no_probe_model_refs() {
 
 test_no_old_work_dir_in_active_files() {
   # Active commands/scripts should use .tmp/ not .claude/tmp/
+  # Exclude setup.md (migration detection)
   local found
-  found=$(grep -rl "\.claude/tmp/ai-review" \
+  found=$(grep -rl --exclude=setup.md "\.claude/tmp/ai-review" \
     "$PROJECT_DIR/commands" "$PROJECT_DIR/scripts" \
     2>/dev/null || true)
   [ -z "$found" ] || { echo "  Found in: $found"; return 1; }

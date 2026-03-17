@@ -1,6 +1,6 @@
 ---
 description: Check debate plugin prerequisites, verify acpx is installed, and print the exact settings.json snippet for fully unattended (no-prompt) operation.
-allowed-tools: Bash(which acpx:*), Bash(which npx:*), Bash(which jq:*), Bash(bash ~/.claude/plugins/cache/cc-debate/debate/*/scripts/create-links.sh:*), Bash(ls:*)
+allowed-tools: Bash(which acpx:*), Bash(which npx:*), Bash(which jq:*), Bash(bash ~/.claude/plugins/cache/cc-debate/debate/*/scripts/create-links.sh:*), Bash(ls:*), Bash(cat:*), Write(~/.claude/debate-acpx.json)
 ---
 
 # debate — Setup & Permission Check
@@ -45,7 +45,108 @@ Report:
 - Found → `✅ jq: found at /path/to/jq`
 - Missing → `❌ jq: not found — install: brew install jq (macOS) / apt install jq (Linux)`
 
-## Step 3: Check debate-acpx.json config
+## Step 3: Detect v1.x installation and migrate
+
+Check for old config files from v1.x:
+
+```bash
+ls ~/.claude/debate-litellm.json ~/.claude/debate-openrouter.json 2>/dev/null
+```
+
+Also check `~/.claude/settings.json` for old permission patterns:
+
+```bash
+cat ~/.claude/settings.json 2>/dev/null
+```
+
+Look for these old patterns in the settings:
+- `invoke-codex`, `invoke-gemini`, `invoke-opus`, `invoke-openai-compat`
+- `run-parallel.sh` (without `-acpx`), `run-parallel-openai-compat`
+- `.claude/tmp/ai-review` (old work dir path, should be `.tmp/ai-review`)
+- `probe-model`
+
+### If old configs found
+
+Report:
+```text
+### v1.x Installation Detected
+
+  ⚠️  Found old config files:
+    ~/.claude/debate-litellm.json
+    ~/.claude/debate-openrouter.json
+```
+
+**Auto-migrate if `~/.claude/debate-acpx.json` does not exist yet:**
+
+Read each old config and extract reviewer entries. Map `model` fields to acpx agents using this table:
+
+| Old model pattern | acpx agent |
+|-------------------|------------|
+| `claude-opus-*`, `claude-sonnet-*`, `claude-*` | `claude` |
+| `gpt-*`, `o1-*`, `o3-*`, `o4-*` | `codex` |
+| `gemini-*` | `gemini` |
+| Any other model | Skip with warning — no acpx agent equivalent |
+
+For each mappable reviewer from the old config, create an entry in the new format:
+```json
+{
+  "reviewers": {
+    "<old-name>": {
+      "agent": "<mapped-agent>",
+      "timeout": <old-timeout or 120>,
+      "system_prompt": "<old system_prompt if present>"
+    }
+  }
+}
+```
+
+Merge reviewers from both old configs (litellm + openrouter), deduplicating by name. If both have a reviewer with the same name, prefer the openrouter entry.
+
+Write the merged config to `~/.claude/debate-acpx.json`.
+
+Report:
+```text
+  ✅ Migrated N reviewer(s) to ~/.claude/debate-acpx.json:
+    opus    → agent: claude   (was model: claude-opus-4-6)
+    codex   → agent: codex    (was model: gpt-5.3-codex)
+
+  ⚠️  Skipped N reviewer(s) — no acpx agent equivalent:
+    deepseek (model: deepseek.v3-v1:0) — no acpx agent for DeepSeek
+```
+
+Tell the user:
+```text
+  Old config files are still present. You can delete them after verifying:
+    rm ~/.claude/debate-litellm.json ~/.claude/debate-openrouter.json
+```
+
+**If `~/.claude/debate-acpx.json` already exists**, skip auto-migration and just report:
+```text
+  ℹ️  Old config files found but ~/.claude/debate-acpx.json already exists — skipping migration.
+     Delete old configs when ready:
+       rm ~/.claude/debate-litellm.json ~/.claude/debate-openrouter.json
+```
+
+### If old settings.json patterns found
+
+Report which patterns are stale and show the replacement:
+```text
+  ⚠️  Stale permission patterns in ~/.claude/settings.json:
+    - "Bash(bash ~/.claude/debate-scripts/invoke-codex.sh:*)"     → remove
+    - "Bash(bash ~/.claude/debate-scripts/invoke-gemini.sh:*)"    → remove
+    - "Bash(bash ~/.claude/debate-scripts/invoke-opus.sh:*)"      → remove
+    - "Bash(bash ~/.claude/debate-scripts/run-parallel.sh:*)"     → remove
+    - "Read(.claude/tmp/ai-review*)"                              → "Read(.tmp/ai-review*)"
+
+  Replace with the updated allowlist shown in Step 6 below.
+  See MIGRATING.md for the complete migration guide.
+```
+
+### If no old installation detected
+
+Skip this step silently — no output needed.
+
+## Step 4: Check debate-acpx.json config
 
 Read `~/.claude/debate-acpx.json`. Report:
 
@@ -58,7 +159,7 @@ Read `~/.claude/debate-acpx.json`. Report:
   ```
 - File missing → suggest running `/debate:acpx-setup` to create it interactively
 
-## Step 4: Create stable scripts symlink
+## Step 5: Create stable scripts symlink
 
 Create `~/.claude/debate-scripts` pointing to the installed version's scripts directory.
 This symlink lets the main debate commands invoke scripts without version interpolation.
@@ -73,7 +174,7 @@ Report:
 
 Note: Re-run `/debate:setup` after updating the plugin to refresh this symlink.
 
-## Step 5: Print permission allowlist
+## Step 6: Print permission allowlist
 
 Print the complete list of Bash tool patterns needed for fully unattended operation (no approval prompts):
 
@@ -108,7 +209,7 @@ each command, so each individual session will prompt once and remember within
 that session. Adding to settings.json makes approval permanent across all sessions.
 ```
 
-## Step 6: Print final status
+## Step 7: Print final status
 
 ```text
 ### Summary

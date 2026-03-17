@@ -121,10 +121,10 @@ EOF
 
 ## Step 6: Re-submit to Opus (Rounds 2–5)
 
-Write the resume prompt to a file, then call the invoke script:
+Write the resume prompt to `<WORK_DIR>/opus-prompt.txt`, then call the invoke script. The prompt file must exist before calling invoke-acpx.sh (it checks for `<name>-prompt.txt` and uses it as the full prompt).
 
-Write `<WORK_DIR>/opus-prompt.txt` with:
-```text
+```bash
+cat > <WORK_DIR>/opus-prompt.txt << 'PROMPT_EOF'
 I've revised the plan based on your feedback. Here is the updated plan:
 
 [content of plan.md]
@@ -135,7 +135,10 @@ Here's what I changed:
 
 Please re-review. If the plan is now solid and ready to implement, end with: VERDICT: APPROVED
 If more changes are needed, end with: VERDICT: REVISE
+PROMPT_EOF
 ```
+
+Then run the invoke script:
 
 ```bash
 bash "<SCRIPT_DIR>/invoke-acpx.sh" "<WORK_DIR>/opus-config.json" "<WORK_DIR>" "opus"

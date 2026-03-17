@@ -7,6 +7,27 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Files that should have been deleted in the acpx migration.
+# Maintain this list in one place so tests stay in sync.
+DELETED_FILES=(
+  commands/codex-review.md
+  commands/gemini-review.md
+  commands/litellm-review.md
+  commands/openrouter-review.md
+  commands/litellm-setup.md
+  commands/openrouter-setup.md
+  scripts/invoke-codex.sh
+  scripts/invoke-gemini.sh
+  scripts/invoke-opus.sh
+  scripts/invoke-openai-compat.sh
+  scripts/run-parallel.sh
+  scripts/run-parallel-openai-compat.sh
+  scripts/probe-model.sh
+  reviewers/codex.md
+  reviewers/gemini.md
+  reviewers/opus.md
+)
+
 PASS=0
 FAIL=0
 
@@ -91,30 +112,14 @@ test_no_old_work_dir_in_active_files() {
 }
 
 test_deleted_files_dont_exist() {
-  local missing=0
-  for f in \
-    commands/codex-review.md \
-    commands/gemini-review.md \
-    commands/litellm-review.md \
-    commands/openrouter-review.md \
-    commands/litellm-setup.md \
-    commands/openrouter-setup.md \
-    scripts/invoke-codex.sh \
-    scripts/invoke-gemini.sh \
-    scripts/invoke-opus.sh \
-    scripts/invoke-openai-compat.sh \
-    scripts/run-parallel.sh \
-    scripts/run-parallel-openai-compat.sh \
-    scripts/probe-model.sh \
-    reviewers/codex.md \
-    reviewers/gemini.md \
-    reviewers/opus.md; do
+  local bad=0
+  for f in "${DELETED_FILES[@]}"; do
     if [ -f "$PROJECT_DIR/$f" ]; then
       echo "  Still exists: $f"
-      missing=1
+      bad=1
     fi
   done
-  [ "$missing" -eq 0 ]
+  [ "$bad" -eq 0 ]
 }
 
 test_new_files_exist() {

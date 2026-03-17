@@ -92,7 +92,7 @@ LiteLLM routed API calls to arbitrary models. With acpx, each reviewer maps to a
 }
 ```
 
-If you were using LiteLLM to access models that **don't** have an acpx agent (e.g., DeepSeek, Mixtral), those models are not currently supported. acpx only supports agents with a CLI binary. Check the [available agents](#available-acpx-agents) list.
+If you were using LiteLLM to access models that **don't** have a native acpx agent (e.g., DeepSeek, Mercury, Mixtral), you can still use them via the **opencode + OpenRouter** bridge. See [Using OpenRouter models via opencode](#using-openrouter-models-via-opencode) below.
 
 ### From OpenRouter (`~/.claude/debate-openrouter.json`)
 
@@ -183,3 +183,44 @@ After updating the plugin, re-run `/debate:setup` to refresh the `~/.claude/deba
 | `kilocode` | Kilocode | `npx @kilocode/cli` |
 
 See [acpx docs](https://github.com/openclaw/acpx) for the full and up-to-date list.
+
+## Using OpenRouter models via opencode
+
+Models that don't have a native acpx agent (DeepSeek, Mercury, Kimi via Moonshot, Mixtral, etc.) can be accessed through OpenRouter using opencode as the ACP bridge:
+
+```text
+acpx → opencode (custom agent) → OpenRouter API → any model
+```
+
+**Setup for each model:**
+
+1. Install opencode (see [opencode.ai](https://opencode.ai))
+2. Create a wrapper directory: `mkdir -p ~/.acpx/agents/<name>`
+3. Write `~/.acpx/agents/<name>/.opencode.json`:
+   ```json
+   {
+     "provider": {
+       "openrouter": { "apiKey": "sk-or-v1-..." }
+     },
+     "agents": {
+       "coder": { "model": "openrouter/<model-id>" }
+     }
+   }
+   ```
+4. Write `~/.acpx/agents/<name>/start.sh`:
+   ```bash
+   #!/bin/bash
+   export OPENCODE_CONFIG_CONTENT='{"model":"openrouter/<model-id>"}'
+   exec opencode acp "$@"
+   ```
+5. `chmod +x ~/.acpx/agents/<name>/start.sh && chmod 600 ~/.acpx/agents/<name>/.opencode.json`
+6. Register in `~/.acpx/config.json`:
+   ```json
+   { "agents": { "<name>": { "command": "/absolute/path/.acpx/agents/<name>/start.sh" } } }
+   ```
+7. Add to `~/.claude/debate-acpx.json`:
+   ```json
+   "<name>": { "agent": "<name>", "timeout": 120 }
+   ```
+
+**Or run `/debate:acpx-setup`** which automates this entire process interactively.

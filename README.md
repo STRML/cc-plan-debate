@@ -158,42 +158,81 @@ Config entry:
 
 Note: if you're running this plugin **inside** Claude, adding `claude` as a reviewer means Claude reviews its own plan. This can still be useful (different persona, fresh context), but for independent perspectives, prefer non-Claude agents.
 
-### Kimi
+### Other built-in agents
+
+acpx supports many more agents with native ACP support: kimi, kiro, qwen, cursor, copilot, opencode, kilocode, droid, iflow, pi, openclaw. See the [acpx docs](https://github.com/openclaw/acpx) for the full list and install instructions. Each works the same way — install the CLI, add a config entry with the agent name.
+
+### Any model via OpenRouter (using opencode)
+
+For models that don't have a dedicated acpx agent (DeepSeek, Mercury, Mixtral, etc.), you can route through [OpenRouter](https://openrouter.ai) using [opencode](https://opencode.ai) as the ACP bridge:
+
+```text
+acpx → opencode → OpenRouter → any model
+```
+
+**Prerequisites:**
+1. Install opencode: see [opencode.ai](https://opencode.ai) for install instructions
+2. Get an OpenRouter API key from [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys)
+
+**For each OpenRouter model you want as a reviewer:**
+
+1. Create a wrapper directory and config:
 
 ```bash
-# See https://github.com/anthropics/kimi-cli for install instructions
+mkdir -p ~/.acpx/agents/mercury
 ```
 
-Config entry:
+2. Write `~/.acpx/agents/mercury/.opencode.json` with the API key and model:
+
 ```json
-"kimi": { "agent": "kimi", "timeout": 120 }
+{
+  "provider": {
+    "openrouter": {
+      "apiKey": "sk-or-v1-..."
+    }
+  },
+  "agents": {
+    "coder": {
+      "model": "openrouter/inception/mercury-2"
+    }
+  }
+}
 ```
 
-### Kiro
+3. Write `~/.acpx/agents/mercury/start.sh`:
 
 ```bash
-# See https://github.com/aws/kiro for install instructions
+#!/bin/bash
+export OPENCODE_CONFIG_CONTENT='{"model":"openrouter/inception/mercury-2"}'
+exec opencode acp "$@"
 ```
 
-Config entry:
-```json
-"kiro": { "agent": "kiro", "timeout": 120 }
-```
-
-### Qwen Code
+4. Make it executable and secure the config:
 
 ```bash
-# See https://github.com/QwenLM/qwen-code for install instructions
+chmod +x ~/.acpx/agents/mercury/start.sh
+chmod 600 ~/.acpx/agents/mercury/.opencode.json
 ```
 
-Config entry:
+5. Register the agent in `~/.acpx/config.json`:
+
 ```json
-"qwen": { "agent": "qwen", "timeout": 120 }
+{
+  "agents": {
+    "mercury": {
+      "command": "/Users/you/.acpx/agents/mercury/start.sh"
+    }
+  }
+}
 ```
 
-### Other agents
+6. Add the reviewer to `~/.claude/debate-acpx.json`:
 
-acpx supports many more agents: cursor, copilot, opencode, kilocode, droid, iflow, pi, openclaw. See the [acpx docs](https://github.com/openclaw/acpx) for the full list and install instructions.
+```json
+"mercury": { "agent": "mercury", "timeout": 120, "system_prompt": "You are The Contrarian..." }
+```
+
+**Or just run `/debate:acpx-setup`** — it automates all of this interactively.
 
 ### Custom agents
 
@@ -202,7 +241,7 @@ acpx supports custom ACP servers via config. Add to `~/.acpx/config.json`:
 ```json
 {
   "agents": {
-    "my-agent": { "command": "./bin/my-acp-server" }
+    "my-agent": { "command": "/path/to/my-acp-server" }
   }
 }
 ```

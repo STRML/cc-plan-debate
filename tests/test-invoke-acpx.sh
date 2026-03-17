@@ -56,10 +56,6 @@ run_test() {
   fi
 }
 
-cleanup() {
-  rm -rf "$WORK_DIR" 2>/dev/null || true
-}
-
 # --- Tests ---
 
 test_happy_path() {

@@ -9,21 +9,16 @@ echo "==============================="
 echo "  debate plugin test suite"
 echo "==============================="
 
-TOTAL_PASS=0
-TOTAL_FAIL=0
-
 run_suite() {
   local name="$1"
   local script="$2"
   echo ""
   if bash "$script"; then
-    echo "  Suite passed."
+    echo "  $name: passed."
   else
-    echo "  Suite FAILED."
-    TOTAL_FAIL=$((TOTAL_FAIL + 1))
+    echo "  $name: FAILED."
     return 1
   fi
-  TOTAL_PASS=$((TOTAL_PASS + 1))
 }
 
 SUITE_FAIL=0
@@ -35,9 +30,9 @@ run_suite "reference integrity" "$SCRIPT_DIR/test-references.sh" || SUITE_FAIL=$
 echo ""
 echo "==============================="
 if [ "$SUITE_FAIL" -eq 0 ]; then
-  echo "  All suites passed."
+  echo "  All 3 suites passed."
 else
-  echo "  $SUITE_FAIL suite(s) FAILED."
+  echo "  $SUITE_FAIL of 3 suite(s) FAILED."
 fi
 echo "==============================="
 

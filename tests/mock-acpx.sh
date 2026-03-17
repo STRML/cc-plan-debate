@@ -25,13 +25,12 @@ fi
 
 # Parse args to find --file
 FILE_ARG=""
-AGENT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --file) FILE_ARG="$2"; shift 2 ;;
     --format|--approve-reads|--approve-all|--deny-all|--timeout) shift 2 ;;
     --*) shift ;;
-    *) AGENT="$1"; shift ;;
+    *) shift ;;
   esac
 done
 

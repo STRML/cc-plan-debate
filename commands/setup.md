@@ -1,6 +1,6 @@
 ---
-description: Check debate plugin prerequisites, verify reviewers are installed and authenticated, and print the exact settings.json snippet for fully unattended (no-prompt) operation.
-allowed-tools: Bash(which codex:*), Bash(which gemini:*), Bash(which claude:*), Bash(which jq:*), Bash(command -v:*), Bash(codex --version:*), Bash(claude --version:*), Bash(timeout 30 gemini:*), Bash(grep -q:*), Bash(jq -e:*), Bash(jq:*), Bash(bash ~/.claude/plugins/cache/cc-debate/debate/*/scripts/probe-model.sh:*), Bash(bash ~/.claude/plugins/cache/cc-debate/debate/*/scripts/create-links.sh:*)
+description: Check debate plugin prerequisites, verify acpx is installed, and print the exact settings.json snippet for fully unattended (no-prompt) operation.
+allowed-tools: Bash(which acpx:*), Bash(which npx:*), Bash(which jq:*), Bash(bash ~/.claude/plugins/cache/cc-debate/debate/*/scripts/create-links.sh:*), Bash(ls:*)
 ---
 
 # debate — Setup & Permission Check
@@ -9,13 +9,10 @@ Verify all prerequisites for the debate plugin and print everything needed for f
 
 ---
 
-## Step 1: Check reviewer binaries
+## Step 1: Check acpx
 
 ```bash
-which codex
-which gemini
-which claude
-which jq
+which acpx || which npx
 ```
 
 Report:
@@ -23,195 +20,45 @@ Report:
 ```
 ## debate — Setup Check
 
-### Reviewer Binaries
-  ✅ codex    found at /path/to/codex
-  ✅ gemini   found at /path/to/gemini
-  ✅ claude   found at /path/to/claude
-
-### Tools
-  ✅ jq       found at /path/to/jq
+### acpx CLI
+  ✅ acpx    found at /path/to/acpx
 ```
 
-For anything missing, show the install command:
-
-| Binary | Install Command |
-|--------|----------------|
-| codex | `npm install -g @openai/codex` |
-| gemini | `npm install -g @google/gemini-cli` |
-| claude | `npm install -g @anthropic-ai/claude-code` |
-| jq | `brew install jq` (macOS) / `apt install jq` (Linux) |
-
-## Step 2: Check Codex version and auth
-
-```bash
-codex --version
+If `acpx` is not found but `npx` is:
+```text
+  ⚠️  acpx not installed globally — will use npx acpx@latest (slower first run)
+     Install globally: npm install -g acpx@latest
 ```
 
-If codex is found, report the version. Codex stores credentials in `~/.codex/auth.json` — check:
+If neither found:
+```text
+  ❌ acpx not found. Install: npm install -g acpx@latest
+```
+
+## Step 2: Check jq
 
 ```bash
-[ -f "$HOME/.codex/auth.json" ] && echo "auth.json: present" || echo "auth.json: NOT FOUND"
+which jq
 ```
 
 Report:
-- Present → `✅ codex: authenticated (v0.x.x)`
-- Not found → `❌ codex: not authenticated — run: codex auth` (or launch `codex` interactively to complete sign-in)
+- Found → `✅ jq: found at /path/to/jq`
+- Missing → `❌ jq: not found — install: brew install jq (macOS) / apt install jq (Linux)`
 
-## Step 3: Check Gemini authentication
+## Step 3: Check debate-acpx.json config
 
-`--list-sessions` hangs in the Claude Code sandbox, so use a real invocation instead:
+Read `~/.claude/debate-acpx.json`. Report:
 
-```bash
-echo "reply with only the word PONG" | timeout 30 gemini -s -e "" 2>/dev/null
-```
-
-Report:
-- Output contains "PONG" (case-insensitive) → `✅ gemini: authenticated`
-- Non-zero exit or no output → `❌ gemini: not authenticated — run: gemini auth`
-
-## Step 3b: Check Claude CLI
-
-```bash
-unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
-claude --version
-```
-
-Report:
-- Exit 0 → `✅ claude: ready (v1.x.x)` — uses Claude Code's stored credentials, no separate API key needed
-- Not found → `❌ claude: not installed — run: npm install -g @anthropic-ai/claude-code`
-
-Note: `--version` confirms binary presence only. Authentication is validated at first use.
-
-## Step 3c: Check Codex sandbox exclusion
-
-Codex panics when run inside the Claude Code sandbox (macOS `SystemConfiguration` NULL crash). It must be listed in `sandbox.excludedCommands` in `~/.claude/settings.json`.
-
-```bash
-jq -e '.sandbox.excludedCommands | index("codex:*")' "$HOME/.claude/settings.json" > /dev/null 2>&1
-```
-
-Report:
-- Exit 0 (index found) → `✅ codex: sandbox excluded`
-- Non-zero → `❌ codex: will panic in sandbox — add "codex:*" to sandbox.excludedCommands in ~/.claude/settings.json`
-
-If missing, show the exact snippet to add:
-```json
-"sandbox": {
-  "excludedCommands": ["codex:*"]
-}
-```
-
-## Step 3d: Check analytics opt-out
-
-Codex and Gemini send analytics/telemetry by default. Check that opt-out config is in place.
-
-**Codex** — check `~/.codex/config.toml` for `[analytics] enabled = false`:
-
-```bash
-grep -q 'enabled = false' "$HOME/.codex/config.toml" 2>/dev/null && echo "analytics disabled" || echo "analytics NOT disabled"
-```
-
-Report:
-- Found → `✅ codex: analytics disabled`
-- Not found → `⚠️ codex: analytics may be enabled — add to ~/.codex/config.toml:`
-  ```toml
-  [analytics]
-  enabled = false
-
-  [otel]
-  exporter = "none"
+- File exists → show reviewer list:
+  ```text
+  ### Config: ~/.claude/debate-acpx.json
+    Reviewers:
+      codex   → agent: codex    (120s timeout)
+      gemini  → agent: gemini   (240s timeout)
   ```
+- File missing → suggest running `/debate:acpx-setup` to create it interactively
 
-**Gemini** — check `~/.gemini/settings.json` for `usageStatisticsEnabled: false`:
-
-```bash
-jq -e '.privacy.usageStatisticsEnabled == false' "$HOME/.gemini/settings.json" > /dev/null 2>&1
-```
-
-Report:
-- Exit 0 → `✅ gemini: usage statistics disabled`
-- Non-zero → `⚠️ gemini: usage statistics may be enabled — add to ~/.gemini/settings.json:`
-  ```json
-  "privacy": { "usageStatisticsEnabled": false },
-  "telemetry": { "enabled": false }
-  ```
-
-## Step 3e: Check available model tiers
-
-Probe which model tiers are accessible for each reviewer. Results are cached 24 hours in `~/.claude/debate-model-probe.json`.
-
-```bash
-bash ~/.claude/plugins/cache/cc-debate/debate/*/scripts/probe-model.sh codex
-```
-
-Report:
-- Exit 0 → `✅ codex model: <model>` (e.g. `gpt-5.3-codex`, `gpt-4.1`, or `gpt-4o`)
-- Exit 2 → `❌ codex: sandbox panic — cannot probe (add codex:* to sandbox.excludedCommands first)`
-- Exit 1 → `❌ codex: no model accessible — check API key and subscription`
-
-```bash
-bash ~/.claude/plugins/cache/cc-debate/debate/*/scripts/probe-model.sh gemini
-```
-
-Report:
-- Exit 0 → `✅ gemini model: <model>` (e.g. `gemini-3.1-pro-preview`, `gemini-2.5-pro`, or `gemini-2.0-flash`)
-- Exit 1 → `❌ gemini: no model accessible — run: gemini auth`
-
-## Step 3e2: Check sandbox network and filesystem allowlists
-
-The debate plugin calls `api.anthropic.com` (for Claude Opus) and `http-intake.logs.us5.datadoghq.com` (Datadog telemetry). The work directory `.claude/tmp/ai-review-*` must also be readable and editable inside the sandbox.
-
-**Network — check for `api.anthropic.com` in `sandbox.network.allowedHosts`:**
-
-```bash
-jq -e '.sandbox.network.allowedHosts | index("api.anthropic.com") != null' "$HOME/.claude/settings.json" > /dev/null 2>&1
-```
-
-Report:
-- Exit 0 → `✅ sandbox: api.anthropic.com whitelisted`
-- Non-zero → `❌ sandbox: api.anthropic.com not whitelisted — add to sandbox.network.allowedHosts in ~/.claude/settings.json`
-
-```bash
-jq -e '.sandbox.network.allowedHosts | index("http-intake.logs.us5.datadoghq.com") != null' "$HOME/.claude/settings.json" > /dev/null 2>&1
-```
-
-Report:
-- Exit 0 → `✅ sandbox: http-intake.logs.us5.datadoghq.com whitelisted`
-- Non-zero → `❌ sandbox: http-intake.logs.us5.datadoghq.com not whitelisted — add to sandbox.network.allowedHosts in ~/.claude/settings.json`
-
-**Filesystem — check for Read/Edit permissions on work dir:**
-
-```bash
-jq -e '.permissions.allow | index("Read(.claude/tmp/ai-review*)") != null' "$HOME/.claude/settings.json" > /dev/null 2>&1
-jq -e '.permissions.allow | index("Edit(.claude/tmp/ai-review*)") != null' "$HOME/.claude/settings.json" > /dev/null 2>&1
-```
-
-Report:
-- Both exit 0 → `✅ sandbox: .claude/tmp/ai-review* read+edit allowed`
-- Any non-zero → `❌ sandbox: .claude/tmp/ai-review* missing read or edit permission — add to permissions.allow`
-
-If anything is missing, show this snippet to add to `~/.claude/settings.json`:
-
-```json
-{
-  "sandbox": {
-    "network": {
-      "allowedHosts": [
-        "api.anthropic.com",
-        "http-intake.logs.us5.datadoghq.com"
-      ]
-    }
-  },
-  "permissions": {
-    "allow": [
-      "Read(.claude/tmp/ai-review*)",
-      "Edit(.claude/tmp/ai-review*)"
-    ]
-  }
-}
-```
-
-## Step 3f: Create stable scripts symlink
+## Step 4: Create stable scripts symlink
 
 Create `~/.claude/debate-scripts` pointing to the installed version's scripts directory.
 This symlink lets the main debate commands invoke scripts without version interpolation.
@@ -226,16 +73,6 @@ Report:
 
 Note: Re-run `/debate:setup` after updating the plugin to refresh this symlink.
 
-## Step 4: Check timeout binary
-
-```bash
-command -v timeout || command -v gtimeout
-```
-
-Report:
-- Found → `✅ timeout: /path/to/timeout`
-- Not found → `❌ timeout: not found — install: brew install coreutils` (macOS) or `apt install coreutils` (Linux)
-
 ## Step 5: Print permission allowlist
 
 Print the complete list of Bash tool patterns needed for fully unattended operation (no approval prompts):
@@ -243,45 +80,29 @@ Print the complete list of Bash tool patterns needed for fully unattended operat
 ```
 ### Permission Allowlist
 
-To run /debate:all, /debate:codex-review, /debate:gemini-review, and /debate:opus-review
-without any approval prompts, add the following to ~/.claude/settings.json:
+To run /debate:all and /debate:opus-review without any approval prompts,
+add the following to ~/.claude/settings.json:
+```
 
+```json
 {
   "permissions": {
     "allow": [
       "Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*)",
-      "Bash(bash ~/.claude/debate-scripts/run-parallel.sh:*)",
-      "Bash(bash ~/.claude/debate-scripts/invoke-codex.sh:*)",
-      "Bash(bash ~/.claude/debate-scripts/invoke-gemini.sh:*)",
-      "Bash(bash ~/.claude/debate-scripts/invoke-opus.sh:*)",
-      "Bash(command -v:*)",
-      "Bash(which codex:*)",
-      "Bash(which gemini:*)",
-      "Bash(which claude:*)",
+      "Bash(bash ~/.claude/debate-scripts/run-parallel-acpx.sh:*)",
+      "Bash(bash ~/.claude/debate-scripts/invoke-acpx.sh:*)",
+      "Bash(which acpx:*)",
       "Bash(which jq:*)",
-      "Read(.claude/tmp/ai-review*)",
-      "Edit(.claude/tmp/ai-review*)",
-      "Bash(rm -rf .claude/tmp/ai-review-:*)",
-      "Bash(codex exec -m:*)",
-      "Bash(codex exec resume:*)",
-      "Bash(gemini -p:*)",
-      "Bash(gemini --resume:*)",
-      "Bash(claude -p:*)",
-      "Bash(claude --resume:*)",
-      "Bash(timeout:*)",
-      "Bash(gtimeout:*)"
+      "Read(.tmp/ai-review*)",
+      "Edit(.tmp/ai-review*)",
+      "Write(.tmp/ai-review*)",
+      "Bash(rm -rf .tmp/ai-review-:*)"
     ]
-  },
-  "sandbox": {
-    "network": {
-      "allowedHosts": [
-        "api.anthropic.com",
-        "http-intake.logs.us5.datadoghq.com"
-      ]
-    }
   }
 }
+```
 
+```
 NOTE: These patterns are already declared in the allowed-tools frontmatter of
 each command, so each individual session will prompt once and remember within
 that session. Adding to settings.json makes approval permanent across all sessions.
@@ -292,17 +113,16 @@ that session. Adding to settings.json makes approval permanent across all sessio
 ```
 ### Summary
 
-  Codex:   ✅ ready (v0.x.x, authenticated, sandbox excluded)
-  Gemini:  ✅ ready (authenticated)
-  Claude:  ✅ ready (v1.x.x)
+  acpx:    ✅ ready
   jq:      ✅ ready (/opt/homebrew/bin/jq)
-  Timeout: ✅ /opt/homebrew/bin/timeout
+  Config:  ✅ valid (N reviewers)
+  Scripts: ✅ symlinked
 
 You are ready to run:
-  /debate:all           — parallel review with synthesis and debate (Codex + Gemini + Opus)
-  /debate:codex-review  — single-reviewer Codex loop
-  /debate:gemini-review — single-reviewer Gemini loop
-  /debate:opus-review   — single-reviewer Opus loop (The Skeptic)
+  /debate:all            — parallel review with synthesis and debate
+  /debate:all codex      — single-reviewer via acpx
+  /debate:opus-review    — iterative Opus review (The Skeptic)
+  /debate:acpx-setup     — configure reviewers
 ```
 
 If anything is missing, list the remaining actions the user needs to take before the plugin will work correctly.

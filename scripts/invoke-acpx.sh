@@ -104,6 +104,26 @@ fi
 CONFIG_TIMEOUT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].timeout // empty' "$CONFIG_FILE")
 CONFIG_SYSTEM_PROMPT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].system_prompt // empty' "$CONFIG_FILE")
 
+# --- Session check: ensure acpx session exists for this agent ---
+# Skip if SKIP_SESSION_CHECK is set (for testing with mock acpx)
+
+if [ -z "${SKIP_SESSION_CHECK:-}" ]; then
+  # Check if a session exists; if not, create one
+  if ! "${ACPX_BIN[@]}" "$AGENT" sessions list > /dev/null 2>&1; then
+    echo "[$REVIEWER] No acpx session for '$AGENT' — creating one..." >&2
+    if ! "${ACPX_BIN[@]}" "$AGENT" sessions new > /dev/null 2>&1; then
+      echo "[$REVIEWER] Failed to create acpx session for '$AGENT'." >&2
+      echo "  Check that the agent CLI is installed and authenticated." >&2
+      echo "  Run /debate:acpx-setup to diagnose." >&2
+      echo "4" > "$WORK_DIR/${REVIEWER}-exit.txt"
+      echo "No acpx session for '$AGENT' and auto-creation failed. Run /debate:acpx-setup to diagnose." > "$WORK_DIR/${REVIEWER}-output.md"
+      trap - EXIT
+      exit 4
+    fi
+    echo "[$REVIEWER] Session created for '$AGENT'." >&2
+  fi
+fi
+
 TIMEOUT="${TIMEOUT_ARG:-${CONFIG_TIMEOUT:-120}}"
 if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]] || [ "$TIMEOUT" -le 0 ]; then
   echo "invoke-acpx: invalid timeout '$TIMEOUT' for '$REVIEWER', using 120s" >&2
@@ -169,6 +189,10 @@ if [ "$EXIT_CODE" -eq 124 ]; then
   echo "[$REVIEWER] Timed out after ${TIMEOUT}s." >&2
 elif [ "$EXIT_CODE" -ne 0 ]; then
   echo "[$REVIEWER] acpx failed (exit $EXIT_CODE)." >&2
+  # Surface stderr for diagnostics
+  if [ -s "$WORK_DIR/${REVIEWER}-stderr.log" ]; then
+    echo "[$REVIEWER] stderr: $(head -5 "$WORK_DIR/${REVIEWER}-stderr.log")" >&2
+  fi
   # If output is empty, populate from stderr
   if [ ! -s "$WORK_DIR/${REVIEWER}-output.md" ]; then
     {

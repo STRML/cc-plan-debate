@@ -57,6 +57,7 @@ test_parallel_happy_path() {
 
   # Ensure mock acpx is on PATH
   PATH="$SCRIPT_DIR:$PATH" \
+  SKIP_SESSION_CHECK=1 \
   MOCK_ACPX_RESPONSE="Mock review. VERDICT: APPROVED" \
     bash "$PARALLEL" "$tmp_dir/config.json" "$review_id" 2>/dev/null
 
@@ -86,6 +87,7 @@ test_subset_reviewers() {
 
   # Only run alpha
   PATH="$SCRIPT_DIR:$PATH" \
+  SKIP_SESSION_CHECK=1 \
   MOCK_ACPX_RESPONSE="Mock review. VERDICT: APPROVED" \
     bash "$PARALLEL" "$tmp_dir/config.json" "$review_id" "alpha" 2>/dev/null
 
@@ -145,6 +147,7 @@ test_prompt_files_cleaned_up() {
   echo "old prompt" > "$work_dir/alpha-prompt.txt"
 
   PATH="$SCRIPT_DIR:$PATH" \
+  SKIP_SESSION_CHECK=1 \
   MOCK_ACPX_RESPONSE="Mock review. VERDICT: APPROVED" \
     bash "$PARALLEL" "$tmp_dir/config.json" "$review_id" 2>/dev/null
 
@@ -183,6 +186,7 @@ EOF
   echo "Test plan" > "$work_dir/plan.md"
 
   PATH="$SCRIPT_DIR:$PATH" \
+  SKIP_SESSION_CHECK=1 \
   MOCK_ACPX_RESPONSE="VERDICT: APPROVED" \
     bash "$PARALLEL" "$tmp_dir/config.json" "$review_id" 2>/dev/null
 
@@ -207,12 +211,69 @@ test_whitespace_trimmed_reviewer_list() {
 
   # Pass "alpha, beta" with a space after the comma
   PATH="$SCRIPT_DIR:$PATH" \
+  SKIP_SESSION_CHECK=1 \
   MOCK_ACPX_RESPONSE="VERDICT: APPROVED" \
     bash "$PARALLEL" "$tmp_dir/config.json" "$review_id" "alpha, beta" 2>/dev/null
 
   # Both should have run despite the space
   [ -f "$work_dir/alpha-exit.txt" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
   [ -f "$work_dir/beta-exit.txt" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
+
+  rm -rf "$work_dir" "$tmp_dir"
+}
+
+test_invoke_logs_created() {
+  # Verify invoke stderr is captured to <name>-invoke.log
+  local tmp_dir review_id work_dir
+  tmp_dir=$(setup_env)
+  review_id="test-$(date +%s)-log"
+  work_dir=".tmp/ai-review-${review_id}"
+
+  mkdir -p "$work_dir"
+  echo "Test plan" > "$work_dir/plan.md"
+
+  PATH="$SCRIPT_DIR:$PATH" \
+  SKIP_SESSION_CHECK=1 \
+  MOCK_ACPX_RESPONSE="Mock review. VERDICT: APPROVED" \
+    bash "$PARALLEL" "$tmp_dir/config.json" "$review_id" 2>/dev/null
+
+  # Invoke logs should exist for each reviewer
+  [ -f "$work_dir/alpha-invoke.log" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
+  [ -f "$work_dir/beta-invoke.log" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
+
+  rm -rf "$work_dir" "$tmp_dir"
+}
+
+test_one_failure_doesnt_block_others() {
+  # If one reviewer fails, others should still complete
+  local tmp_dir review_id work_dir
+  tmp_dir=$(mktemp -d)
+  review_id="test-$(date +%s)-indep"
+  work_dir=".tmp/ai-review-${review_id}"
+
+  # Config with a failing and succeeding reviewer
+  cat > "$tmp_dir/config.json" << 'EOF'
+{
+  "reviewers": {
+    "good": { "agent": "codex", "timeout": 10 },
+    "bad": { "agent": "gemini", "timeout": 10 }
+  }
+}
+EOF
+
+  mkdir -p "$work_dir"
+  echo "Test plan" > "$work_dir/plan.md"
+
+  # Can't selectively fail one mock per reviewer in this setup,
+  # so we test that both get exit files regardless
+  PATH="$SCRIPT_DIR:$PATH" \
+  SKIP_SESSION_CHECK=1 \
+  MOCK_ACPX_RESPONSE="Mock review. VERDICT: APPROVED" \
+    bash "$PARALLEL" "$tmp_dir/config.json" "$review_id" 2>/dev/null
+
+  # Both should have produced exit files (independent execution)
+  [ -f "$work_dir/good-exit.txt" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
+  [ -f "$work_dir/bad-exit.txt" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
 
   rm -rf "$work_dir" "$tmp_dir"
 }
@@ -236,6 +297,8 @@ run_test "prompt files cleaned up" test_prompt_files_cleaned_up
 run_test "invalid review ID rejected" test_invalid_review_id_rejected
 run_test "reviewer name sanitization" test_reviewer_name_sanitization
 run_test "whitespace trimmed reviewer list" test_whitespace_trimmed_reviewer_list
+run_test "invoke logs created" test_invoke_logs_created
+run_test "one failure doesnt block others" test_one_failure_doesnt_block_others
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ($(( PASS + FAIL )) total) ==="

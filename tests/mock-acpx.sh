@@ -10,6 +10,28 @@
 #
 # This script mimics `acpx --format quiet --approve-reads <agent> --file <prompt>`.
 # It reads the --file argument to verify it exists, then outputs the response.
+#
+# Session subcommands:
+#   MOCK_ACPX_SESSION_LIST_EXIT — exit code for `<agent> sessions list` (default: 0)
+#   MOCK_ACPX_SESSION_NEW_EXIT  — exit code for `<agent> sessions new`  (default: 0)
+#
+# When invoked as `acpx <agent> sessions list|new`, returns the configured exit code.
+
+# Handle session subcommands: acpx <agent> sessions <list|new>
+if [ $# -ge 3 ] && [ "$2" = "sessions" ]; then
+  LOG="${MOCK_ACPX_LOG:-}"
+  if [ -n "$LOG" ]; then
+    echo "acpx $*" >> "$LOG"
+  fi
+  case "$3" in
+    list)
+      exit "${MOCK_ACPX_SESSION_LIST_EXIT:-0}"
+      ;;
+    new)
+      exit "${MOCK_ACPX_SESSION_NEW_EXIT:-0}"
+      ;;
+  esac
+fi
 
 EXIT_CODE="${MOCK_ACPX_EXIT:-0}"
 # Use ${VAR-default} (no colon) so MOCK_ACPX_RESPONSE="" is respected as empty

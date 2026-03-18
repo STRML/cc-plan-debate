@@ -87,8 +87,9 @@ for NAME in "${REVIEWERS[@]}"; do
 
   echo "[debate] Spawning $NAME ($AGENT, timeout: ${TIMEOUT}s)..." >&2
   rm -f "$WORK_DIR/${NAME}-exit.txt"
-  nohup bash "$SCRIPT_DIR/invoke-acpx.sh" "$CONFIG_FILE" "$WORK_DIR" "$NAME" "$TIMEOUT" \
-    > /dev/null 2>&1 &
+  nohup env SKIP_SESSION_CHECK="${SKIP_SESSION_CHECK:-}" \
+    bash "$SCRIPT_DIR/invoke-acpx.sh" "$CONFIG_FILE" "$WORK_DIR" "$NAME" "$TIMEOUT" \
+    > /dev/null 2>"$WORK_DIR/${NAME}-invoke.log" &
   PIDS+=("$!")
   disown "${PIDS[-1]}"
   EXIT_FILES+=("$WORK_DIR/${NAME}-exit.txt")

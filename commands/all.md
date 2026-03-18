@@ -53,7 +53,11 @@ Reviewers:
   mercury  → agent: mercury  (120s)
 ```
 
-### 1d. Capture the plan
+### 1d. Verify sessions
+
+Sessions are auto-created by `invoke-acpx.sh` on first run, so no manual session creation is needed. However, if a reviewer fails with exit code 4 (session creation failed), it means the agent CLI is not installed or not authenticated. In that case, suggest running `/debate:acpx-setup` to diagnose.
+
+### 1e. Capture the plan
 
 First check whether a plan exists in the current conversation context. If no plan is present, ask the user to paste it or describe what to review. Once a plan is available, write it to `<WORK_DIR>/plan.md`.
 
@@ -81,8 +85,9 @@ For each configured reviewer, read:
 
 Exit code meanings:
 - `0` — success
+- `4` — session creation failed (agent not installed or not authenticated)
 - `124` — timed out
-- Other — error (check `<name>-stderr.log` for details)
+- Other — error (check `<name>-stderr.log` and `<name>-invoke.log` for details)
 
 **If all reviewers failed:**
 ```text

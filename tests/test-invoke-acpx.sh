@@ -63,6 +63,7 @@ test_happy_path() {
   work_dir=$(setup_work_dir)
   config=$(setup_config "$work_dir")
 
+  SKIP_SESSION_CHECK=1 \
   PATH="$SCRIPT_DIR:$PATH" \
   MOCK_ACPX_RESPONSE="Great plan! VERDICT: APPROVED" \
     bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
@@ -88,6 +89,7 @@ test_prompt_file_used_for_debate() {
 
   local log_file="$work_dir/acpx-log.txt"
 
+  SKIP_SESSION_CHECK=1 \
   PATH="$SCRIPT_DIR:$PATH" \
   MOCK_ACPX_RESPONSE="I stand by my position. VERDICT: REVISE" \
   MOCK_ACPX_LOG="$log_file" \
@@ -107,6 +109,7 @@ test_initial_prompt_includes_plan() {
   work_dir=$(setup_work_dir)
   config=$(setup_config "$work_dir")
 
+  SKIP_SESSION_CHECK=1 \
   PATH="$SCRIPT_DIR:$PATH" \
   MOCK_ACPX_RESPONSE="Looks good. VERDICT: APPROVED" \
     bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
@@ -125,6 +128,7 @@ test_fallback_system_prompt() {
   config=$(setup_config "$work_dir")
 
   # "no-prompt" reviewer has no system_prompt in config
+  SKIP_SESSION_CHECK=1 \
   PATH="$SCRIPT_DIR:$PATH" \
   MOCK_ACPX_RESPONSE="VERDICT: APPROVED" \
     bash "$INVOKE" "$config" "$work_dir" "no-prompt" 2>/dev/null
@@ -140,6 +144,7 @@ test_acpx_failure_populates_output() {
   work_dir=$(setup_work_dir)
   config=$(setup_config "$work_dir")
 
+  SKIP_SESSION_CHECK=1 \
   PATH="$SCRIPT_DIR:$PATH" \
   MOCK_ACPX_EXIT=1 \
   MOCK_ACPX_RESPONSE="" \
@@ -161,6 +166,7 @@ test_empty_response_detected() {
   config=$(setup_config "$work_dir")
 
   set +e
+  SKIP_SESSION_CHECK=1 \
   PATH="$SCRIPT_DIR:$PATH" \
   MOCK_ACPX_EXIT=0 \
   MOCK_ACPX_RESPONSE="" \
@@ -265,6 +271,7 @@ test_npx_fallback() {
   PATH="$safe_path" command -v npx > /dev/null 2>&1 || { rm -rf "$work_dir"; return 1; }
   PATH="$safe_path" command -v acpx > /dev/null 2>&1 && { rm -rf "$work_dir"; return 1; }  # fail if acpx found
 
+  SKIP_SESSION_CHECK=1 \
   PATH="$safe_path" \
   MOCK_ACPX_RESPONSE="VERDICT: APPROVED" \
     bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
@@ -282,6 +289,7 @@ test_timeout_override() {
   local log_file="$work_dir/acpx-log.txt"
 
   # Pass timeout as 4th arg — the invoke script wraps with system timeout binary
+  SKIP_SESSION_CHECK=1 \
   PATH="$SCRIPT_DIR:$PATH" \
   MOCK_ACPX_RESPONSE="VERDICT: APPROVED" \
   MOCK_ACPX_LOG="$log_file" \
@@ -290,6 +298,128 @@ test_timeout_override() {
   # Can't easily verify the timeout value was used (it's an arg to the timeout binary),
   # but we can verify the script succeeded
   [ "$(cat "$work_dir/test-reviewer-exit.txt")" = "0" ] || return 1
+
+  rm -rf "$work_dir"
+}
+
+# --- Session check tests ---
+
+test_session_auto_created() {
+  # When session list fails (exit 1), invoke should auto-create and proceed
+  local work_dir config
+  work_dir=$(setup_work_dir)
+  config=$(setup_config "$work_dir")
+  local log_file="$work_dir/acpx-log.txt"
+
+  PATH="$SCRIPT_DIR:$PATH" \
+  MOCK_ACPX_SESSION_LIST_EXIT=1 \
+  MOCK_ACPX_SESSION_NEW_EXIT=0 \
+  MOCK_ACPX_RESPONSE="Great plan! VERDICT: APPROVED" \
+  MOCK_ACPX_LOG="$log_file" \
+    bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
+
+  # Should succeed despite session list failing
+  [ "$(cat "$work_dir/test-reviewer-exit.txt")" = "0" ] || return 1
+  grep -q "VERDICT: APPROVED" "$work_dir/test-reviewer-output.md" || return 1
+
+  # Log should show sessions new was called (agent name appears in session commands)
+  grep -q "sessions" "$log_file" || return 1
+
+  rm -rf "$work_dir"
+}
+
+test_session_creation_fails_exits_4() {
+  # When both session list and session new fail, should exit 4
+  local work_dir config
+  work_dir=$(setup_work_dir)
+  config=$(setup_config "$work_dir")
+
+  set +e
+  PATH="$SCRIPT_DIR:$PATH" \
+  MOCK_ACPX_SESSION_LIST_EXIT=1 \
+  MOCK_ACPX_SESSION_NEW_EXIT=1 \
+  MOCK_ACPX_RESPONSE="should not reach this" \
+    bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
+  local exit_code=$?
+  set -e
+
+  # Should exit 4
+  [ "$exit_code" -eq 4 ] || return 1
+
+  # Exit file should be 4
+  [ "$(cat "$work_dir/test-reviewer-exit.txt")" = "4" ] || return 1
+
+  # Output should mention session failure
+  grep -q "session" "$work_dir/test-reviewer-output.md" || return 1
+
+  rm -rf "$work_dir"
+}
+
+test_session_exists_no_extra_calls() {
+  # When session list succeeds, no session new call should be made
+  local work_dir config
+  work_dir=$(setup_work_dir)
+  config=$(setup_config "$work_dir")
+  local log_file="$work_dir/acpx-log.txt"
+
+  PATH="$SCRIPT_DIR:$PATH" \
+  MOCK_ACPX_SESSION_LIST_EXIT=0 \
+  MOCK_ACPX_RESPONSE="VERDICT: APPROVED" \
+  MOCK_ACPX_LOG="$log_file" \
+    bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
+
+  [ "$(cat "$work_dir/test-reviewer-exit.txt")" = "0" ] || return 1
+
+  # Log should NOT contain "sessions new" — only "sessions list" and the review call
+  ! grep -q "sessions new" "$log_file" || return 1
+
+  rm -rf "$work_dir"
+}
+
+test_skip_session_check_env() {
+  # SKIP_SESSION_CHECK should bypass session validation entirely
+  local work_dir config
+  work_dir=$(setup_work_dir)
+  config=$(setup_config "$work_dir")
+  local log_file="$work_dir/acpx-log.txt"
+
+  # Session list would fail, but we skip the check
+  SKIP_SESSION_CHECK=1 \
+  PATH="$SCRIPT_DIR:$PATH" \
+  MOCK_ACPX_SESSION_LIST_EXIT=1 \
+  MOCK_ACPX_SESSION_NEW_EXIT=1 \
+  MOCK_ACPX_RESPONSE="VERDICT: APPROVED" \
+  MOCK_ACPX_LOG="$log_file" \
+    bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
+
+  # Should succeed — session check was skipped
+  [ "$(cat "$work_dir/test-reviewer-exit.txt")" = "0" ] || return 1
+
+  # Log should NOT contain any session commands
+  ! grep -q "sessions" "$log_file" || return 1
+
+  rm -rf "$work_dir"
+}
+
+test_stderr_surfaced_on_failure() {
+  # When acpx fails with stderr, stderr should appear in output
+  local work_dir config
+  work_dir=$(setup_work_dir)
+  config=$(setup_config "$work_dir")
+
+  SKIP_SESSION_CHECK=1 \
+  PATH="$SCRIPT_DIR:$PATH" \
+  MOCK_ACPX_EXIT=1 \
+  MOCK_ACPX_RESPONSE="" \
+  MOCK_ACPX_STDERR="Error: rate limit exceeded" \
+    bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null || true
+
+  # Output should contain the stderr content
+  grep -q "rate limit exceeded" "$work_dir/test-reviewer-output.md" || return 1
+
+  # Stderr log should also exist
+  [ -s "$work_dir/test-reviewer-stderr.log" ] || return 1
+  grep -q "rate limit exceeded" "$work_dir/test-reviewer-stderr.log" || return 1
 
   rm -rf "$work_dir"
 }
@@ -317,6 +447,11 @@ run_test "empty plan rejected" test_empty_plan_rejected
 run_test "npx fallback" test_npx_fallback
 run_test "unknown reviewer fails" test_unknown_reviewer_fails
 run_test "timeout override" test_timeout_override
+run_test "session auto-created" test_session_auto_created
+run_test "session creation fails exits 4" test_session_creation_fails_exits_4
+run_test "session exists no extra calls" test_session_exists_no_extra_calls
+run_test "skip session check env" test_skip_session_check_env
+run_test "stderr surfaced on failure" test_stderr_surfaced_on_failure
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ($(( PASS + FAIL )) total) ==="

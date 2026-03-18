@@ -356,22 +356,22 @@ test_session_creation_fails_exits_4() {
 }
 
 test_session_exists_no_extra_calls() {
-  # When session list succeeds, no session new call should be made
+  # sessions new is always called before every review (even when sessions already exist)
   local work_dir config
   work_dir=$(setup_work_dir)
   config=$(setup_config "$work_dir")
   local log_file="$work_dir/acpx-log.txt"
 
   PATH="$SCRIPT_DIR:$PATH" \
-  MOCK_ACPX_SESSION_LIST_EXIT=0 \
+  MOCK_ACPX_SESSION_NEW_EXIT=0 \
   MOCK_ACPX_RESPONSE="VERDICT: APPROVED" \
   MOCK_ACPX_LOG="$log_file" \
     bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
 
   [ "$(cat "$work_dir/test-reviewer-exit.txt")" = "0" ] || return 1
 
-  # Log should NOT contain "sessions new" — only "sessions list" and the review call
-  ! grep -q "sessions new" "$log_file" || return 1
+  # sessions new must always be called — it's the reliable way to ensure a session exists
+  grep -q "sessions new" "$log_file" || return 1
 
   rm -rf "$work_dir"
 }

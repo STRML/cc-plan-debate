@@ -104,24 +104,25 @@ fi
 CONFIG_TIMEOUT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].timeout // empty' "$CONFIG_FILE")
 CONFIG_SYSTEM_PROMPT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].system_prompt // empty' "$CONFIG_FILE")
 
-# --- Session check: ensure acpx session exists for this agent ---
+# --- Session creation: always create a session before running ---
+# acpx requires a session to exist. `sessions list` returns exit 0 with empty
+# output when no sessions exist, so we can't use it to detect the "no sessions"
+# case reliably. Instead, always call `sessions new` — it's idempotent enough
+# for our purposes and guarantees a valid session before each run.
 # Skip if SKIP_SESSION_CHECK is set (for testing with mock acpx)
 
 if [ -z "${SKIP_SESSION_CHECK:-}" ]; then
-  # Check if a session exists; if not, create one
-  if ! "${ACPX_BIN[@]}" "$AGENT" sessions list > /dev/null 2>&1; then
-    echo "[$REVIEWER] No acpx session for '$AGENT' — creating one..." >&2
-    if ! "${ACPX_BIN[@]}" "$AGENT" sessions new > /dev/null 2>&1; then
-      echo "[$REVIEWER] Failed to create acpx session for '$AGENT'." >&2
-      echo "  Check that the agent CLI is installed and authenticated." >&2
-      echo "  Run /debate:acpx-setup to diagnose." >&2
-      echo "4" > "$WORK_DIR/${REVIEWER}-exit.txt"
-      echo "No acpx session for '$AGENT' and auto-creation failed. Run /debate:acpx-setup to diagnose." > "$WORK_DIR/${REVIEWER}-output.md"
-      trap - EXIT
-      exit 4
-    fi
-    echo "[$REVIEWER] Session created for '$AGENT'." >&2
+  echo "[$REVIEWER] Creating acpx session for '$AGENT'..." >&2
+  if ! "${ACPX_BIN[@]}" "$AGENT" sessions new > /dev/null 2>&1; then
+    echo "[$REVIEWER] Failed to create acpx session for '$AGENT'." >&2
+    echo "  Check that the agent CLI is installed and authenticated." >&2
+    echo "  Run /debate:acpx-setup to diagnose." >&2
+    echo "4" > "$WORK_DIR/${REVIEWER}-exit.txt"
+    echo "Failed to create acpx session for '$AGENT'. Run /debate:acpx-setup to diagnose." > "$WORK_DIR/${REVIEWER}-output.md"
+    trap - EXIT
+    exit 4
   fi
+  echo "[$REVIEWER] Session ready." >&2
 fi
 
 TIMEOUT="${TIMEOUT_ARG:-${CONFIG_TIMEOUT:-120}}"

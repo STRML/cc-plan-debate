@@ -55,7 +55,7 @@ Reviewers:
 
 ### 1d. Verify sessions
 
-Sessions are auto-created by `invoke-acpx.sh` on first run, so no manual session creation is needed. However, if a reviewer fails with exit code 4 (session creation failed), it means the agent CLI is not installed or not authenticated. In that case, suggest running `/debate:acpx-setup` to diagnose.
+`invoke-acpx.sh` creates a new acpx session before every review run — no manual session creation is needed. If a reviewer fails with exit code 4 (session creation failed), it means the agent CLI is not installed or not authenticated. In that case, suggest running `/debate:acpx-setup` to diagnose.
 
 ### 1e. Capture the plan
 

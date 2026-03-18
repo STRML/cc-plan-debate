@@ -140,7 +140,18 @@ npm install -g @google/gemini-cli
 gemini auth
 ```
 
-Verify: `echo "PONG" | gemini -s -e ""`
+The `gemini` acpx agent also requires a **Gemini API key** for non-interactive use. The Gemini CLI's stored OAuth credentials work for direct CLI use but cannot be used by acpx's subprocess runner.
+
+Get a free key (includes Gemini 2.0/2.5 Flash): [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+
+Add to `~/.claude/settings.json`:
+```json
+"env": {
+  "GEMINI_API_KEY": "AIza..."
+}
+```
+
+Restart Claude Code after adding. Verify: `acpx gemini sessions new`
 
 Config entry:
 ```json

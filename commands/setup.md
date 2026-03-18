@@ -45,7 +45,35 @@ Report:
 - Found → `✅ jq: found at /path/to/jq`
 - Missing → `❌ jq: not found — install: brew install jq (macOS) / apt install jq (Linux)`
 
-## Step 3: Detect v1.x installation and migrate
+## Step 3: Check agent auth
+
+Check whether `GEMINI_API_KEY` is set — required for the `gemini` acpx agent (interactive OAuth doesn't work in non-interactive subprocess mode):
+
+```bash
+echo "${GEMINI_API_KEY:+set}" 2>/dev/null
+```
+
+Report:
+- Output is `set` → `✅ GEMINI_API_KEY: set (gemini agent enabled for acpx)`
+- Empty → `⚠️  GEMINI_API_KEY not set — gemini agent will fail in acpx`
+
+If not set and the user has `gemini` configured as a reviewer:
+```text
+  ⚠️  GEMINI_API_KEY is not set.
+  The gemini acpx agent requires an API key (interactive OAuth is not supported in subprocess mode).
+
+  Get a free key: https://aistudio.google.com/apikey
+  Then add to ~/.claude/settings.json:
+    "env": { "GEMINI_API_KEY": "AIza..." }
+
+  Note: gemini CLI direct usage continues to work — this only affects /debate:all.
+  Alternatively, use gemini via OpenRouter: /debate:acpx-setup → pick OpenRouter model.
+```
+
+If `gemini` is not in the user's `~/.claude/debate-acpx.json` config, skip this step silently.
+
+## Step 4: Detect v1.x installation and migrate
+
 
 Check for old config files from v1.x:
 
@@ -138,7 +166,7 @@ Report which patterns are stale and show the replacement:
     - "Bash(bash ~/.claude/debate-scripts/run-parallel.sh:*)"     → remove
     - "Read(.claude/tmp/ai-review*)"                              → "Read(.tmp/ai-review*)"
 
-  Replace with the updated allowlist shown in Step 6 below.
+  Replace with the updated allowlist shown in Step 7 below.
   See MIGRATING.md for the complete migration guide.
 ```
 
@@ -146,7 +174,7 @@ Report which patterns are stale and show the replacement:
 
 Skip this step silently — no output needed.
 
-## Step 4: Check debate-acpx.json config
+## Step 5: Check debate-acpx.json config
 
 Read `~/.claude/debate-acpx.json`. Report:
 
@@ -159,7 +187,7 @@ Read `~/.claude/debate-acpx.json`. Report:
   ```
 - File missing → suggest running `/debate:acpx-setup` to create it interactively
 
-## Step 5: Create stable scripts symlink
+## Step 6: Create stable scripts symlink
 
 Create `~/.claude/debate-scripts` pointing to the installed version's scripts directory.
 This symlink lets the main debate commands invoke scripts without version interpolation.
@@ -174,7 +202,7 @@ Report:
 
 Note: Re-run `/debate:setup` after updating the plugin to refresh this symlink.
 
-## Step 6: Print permission allowlist
+## Step 7: Print permission allowlist
 
 Print the complete list of Bash tool patterns needed for fully unattended operation (no approval prompts):
 
@@ -209,7 +237,7 @@ each command, so each individual session will prompt once and remember within
 that session. Adding to settings.json makes approval permanent across all sessions.
 ```
 
-## Step 7: Print final status
+## Step 8: Print final status
 
 ```text
 ### Summary

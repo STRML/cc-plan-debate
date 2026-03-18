@@ -78,7 +78,7 @@ Present two categories:
 Built-in acpx agents (need the agent CLI installed):
   codex    — OpenAI Codex        (npm install -g @openai/codex)
   claude   — Claude Code         (already installed)
-  gemini   — Google Gemini       (npm install -g @google/gemini-cli)
+  gemini   — Google Gemini       (npm install -g @google/gemini-cli) ⚠️  needs GEMINI_API_KEY for acpx
   cursor   — Cursor CLI          (install Cursor IDE)
   copilot  — GitHub Copilot CLI  (gh extension install github/gh-copilot)
   kimi     — Kimi CLI
@@ -185,23 +185,52 @@ For system prompts, suggest unique review personas for each reviewer. Examples:
 
 ## Step 3: Probe each agent
 
-For each configured reviewer, run a quick test:
+For each configured reviewer, create a session and run a quick test:
 
 ```bash
-echo "Reply with only the word PONG." | $ACPX_CMD --format quiet --approve-reads --timeout 30 <agent>
+$ACPX_CMD <agent> sessions new 2>&1
+echo "Reply with only the word PONG." | $ACPX_CMD --format quiet --approve-reads <agent>
 ```
-
-Note: for custom agents (OpenRouter via opencode), this will create an acpx session. If the probe fails with "No acpx session found", first create one:
-```bash
-$ACPX_CMD <agent> sessions new
-```
-Then retry the probe.
 
 Report:
 - Response contains "PONG" → `✅ <name>: <agent> responds`
-- Error/timeout → `❌ <name>: <agent> failed — check that the agent CLI is installed and authenticated`
+- Session creation fails or probe times out → `❌ <name>: <agent> failed`
 
-For OpenRouter agents, a common failure mode is wrong model ID. Suggest the user verify the model ID at openrouter.ai/models.
+### Gemini agent — non-interactive auth
+
+The `gemini` agent requires an API key for non-interactive use (acpx runs it as a subprocess, which cannot complete interactive OAuth). The Gemini CLI's stored OAuth credentials do **not** transfer to non-interactive subprocesses.
+
+If the gemini probe fails with a message like "No GEMINI_API_KEY" or "waiting on interactive OAuth":
+
+```text
+  ❌ gemini: needs API key for non-interactive use (interactive OAuth not supported in subprocess mode)
+
+  Fix: get a free Gemini API key and add it to your environment:
+
+  1. Visit: https://aistudio.google.com/apikey
+  2. Click "Create API key" → copy the key (starts with "AIza...")
+  3. Add to ~/.claude/settings.json:
+     {
+       "env": {
+         "GEMINI_API_KEY": "AIza..."
+       }
+     }
+  4. Restart Claude Code, then re-run /debate:acpx-setup to verify.
+
+  The free tier is sufficient — Gemini 2.0/2.5 Flash models are included.
+  Note: gemini CLI direct usage continues to work with OAuth — this only affects /debate:all.
+```
+
+Ask the user if they want to set up the API key now. If yes:
+1. Ask them to paste the key
+2. Read `~/.claude/settings.json`, add or merge `"env": { "GEMINI_API_KEY": "<key>" }`, write back
+3. Inform them to restart Claude Code for the env var to take effect
+
+### Other agent failure modes
+
+For OpenRouter agents (custom opencode-based agents): a common failure is wrong model ID. Suggest verifying the model ID at openrouter.ai/models.
+
+For custom agents with no acpx session: try `$ACPX_CMD <agent> sessions new` first.
 
 ## Step 4: Check debate-scripts symlink
 

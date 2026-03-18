@@ -372,6 +372,12 @@ The `/debate:setup` command also detects v1.x configs automatically and offers t
 
 ---
 
+## Changelog
+
+See **[CHANGELOG.md](CHANGELOG.md)** for release history.
+
+---
+
 ## License
 
 MIT

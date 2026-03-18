@@ -41,20 +41,37 @@ if [ -z "$CONFIG_FILE" ] || [ -z "$WORK_DIR" ] || [ -z "$REVIEWER" ]; then
   exit 1
 fi
 
-# --- Trap: ensure exit file is always written ---
+# --- Resolve acpx binary (support npx fallback) ---
+
+ACPX_BIN=""
+if command -v acpx > /dev/null 2>&1; then
+  ACPX_BIN="acpx"
+elif command -v npx > /dev/null 2>&1; then
+  ACPX_BIN="npx acpx@latest"
+else
+  echo "invoke-acpx: acpx not found. Install: npm install -g acpx@latest" >&2
+  # Write a meaningful exit file if we can
+  if [ -n "$WORK_DIR" ] && [ -n "$REVIEWER" ] && [ -d "$WORK_DIR" ]; then
+    echo "1" > "$WORK_DIR/${REVIEWER}-exit.txt"
+    echo "acpx not installed. Run: npm install -g acpx@latest" > "$WORK_DIR/${REVIEWER}-output.md"
+  fi
+  exit 1
+fi
+
+# --- Trap: ensure exit file is always written on unexpected exit ---
+# Only fires on abnormal termination — normal exit paths call trap - EXIT before returning.
 
 create_exit_file() {
   local code="${1:-1}"
-  local reason="${2:-unknown error}"
   if [ -n "$WORK_DIR" ] && [ -n "$REVIEWER" ]; then
     echo "$code" > "$WORK_DIR/${REVIEWER}-exit.txt"
     if [ ! -f "$WORK_DIR/${REVIEWER}-output.md" ]; then
-      echo "invoke-acpx: $reason" > "$WORK_DIR/${REVIEWER}-output.md"
+      echo "invoke-acpx: process terminated unexpectedly (exit $code)" > "$WORK_DIR/${REVIEWER}-output.md"
     fi
   fi
 }
 
-trap 'create_exit_file "$?" "unexpected exit"' EXIT
+trap 'create_exit_file "$?"' EXIT
 
 if [ ! -d "$WORK_DIR" ]; then
   echo "invoke-acpx: work_dir does not exist: $WORK_DIR" >&2
@@ -63,6 +80,11 @@ fi
 
 if [ ! -f "$WORK_DIR/plan.md" ]; then
   echo "invoke-acpx: plan.md not found in $WORK_DIR" >&2
+  exit 1
+fi
+
+if [ ! -s "$WORK_DIR/plan.md" ]; then
+  echo "invoke-acpx: plan.md is empty in $WORK_DIR" >&2
   exit 1
 fi
 
@@ -134,7 +156,7 @@ ACPX_CMD=()
 if [ -n "$TIMEOUT_BIN" ] && [ "$TIMEOUT" -gt 0 ]; then
   ACPX_CMD+=("$TIMEOUT_BIN" "$TIMEOUT")
 fi
-ACPX_CMD+=(acpx --format quiet --approve-reads "$AGENT" --file "$PROMPT_FILE")
+ACPX_CMD+=($ACPX_BIN --format quiet --approve-reads "$AGENT" --file "$PROMPT_FILE")
 
 set +e
 "${ACPX_CMD[@]}" > "$WORK_DIR/${REVIEWER}-output.md" 2>"$WORK_DIR/${REVIEWER}-stderr.log"

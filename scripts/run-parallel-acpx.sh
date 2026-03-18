@@ -42,13 +42,21 @@ fi
 
 # Get reviewer names: CLI arg or all from config
 if [ -n "$REVIEWER_LIST" ]; then
-  IFS=',' read -ra REVIEWERS <<< "$REVIEWER_LIST"
+  IFS=',' read -ra RAW_REVIEWERS <<< "$REVIEWER_LIST"
 else
-  REVIEWERS=()
+  RAW_REVIEWERS=()
   while IFS= read -r line; do
-    REVIEWERS+=("$line")
+    RAW_REVIEWERS+=("$line")
   done < <(jq -r '.reviewers | keys[]' "$CONFIG_FILE")
 fi
+
+# Trim whitespace and drop empty tokens
+REVIEWERS=()
+for r in "${RAW_REVIEWERS[@]}"; do
+  r="${r#"${r%%[![:space:]]*}"}"  # ltrim
+  r="${r%"${r##*[![:space:]]}"}"  # rtrim
+  [ -n "$r" ] && REVIEWERS+=("$r")
+done
 
 if [ ${#REVIEWERS[@]} -eq 0 ]; then
   echo "[debate] No reviewers configured in $CONFIG_FILE" >&2
@@ -57,8 +65,15 @@ fi
 
 EXIT_FILES=()
 PIDS=()
+MAX_REVIEWER_TIMEOUT=0
 
 for NAME in "${REVIEWERS[@]}"; do
+  # Sanitize reviewer name — must be alphanumeric/dash/underscore only
+  if ! [[ "$NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    echo "[debate] Skipping '$NAME' — invalid reviewer name (alphanumeric/dash/underscore only)" >&2
+    continue
+  fi
+
   AGENT=$(jq -r --arg name "$NAME" '.reviewers[$name].agent // empty' "$CONFIG_FILE")
   if [ -z "$AGENT" ]; then
     echo "[debate] Skipping $NAME — no agent in config" >&2
@@ -66,6 +81,9 @@ for NAME in "${REVIEWERS[@]}"; do
   fi
 
   TIMEOUT=$(jq -r --arg name "$NAME" '.reviewers[$name].timeout // 120' "$CONFIG_FILE")
+  if [[ "$TIMEOUT" =~ ^[0-9]+$ ]] && [ "$TIMEOUT" -gt "$MAX_REVIEWER_TIMEOUT" ]; then
+    MAX_REVIEWER_TIMEOUT="$TIMEOUT"
+  fi
 
   echo "[debate] Spawning $NAME ($AGENT, timeout: ${TIMEOUT}s)..." >&2
   rm -f "$WORK_DIR/${NAME}-exit.txt"
@@ -85,7 +103,16 @@ echo "[debate] Waiting for ${#EXIT_FILES[@]} reviewer(s)..." >&2
 
 POLL_INTERVAL=2
 ELAPSED=0
-MAX_WAIT="${POLL_MAX_WAIT:-450}"
+# MAX_WAIT must be >= max reviewer timeout + startup buffer.
+# Default: max configured reviewer timeout + 60s buffer, minimum 120s.
+# Override with POLL_MAX_WAIT env var.
+if [ -n "${POLL_MAX_WAIT:-}" ]; then
+  MAX_WAIT="$POLL_MAX_WAIT"
+elif [ "$MAX_REVIEWER_TIMEOUT" -gt 0 ]; then
+  MAX_WAIT=$(( MAX_REVIEWER_TIMEOUT + 60 ))
+else
+  MAX_WAIT=450
+fi
 
 while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
   DONE=0

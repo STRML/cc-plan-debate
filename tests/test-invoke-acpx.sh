@@ -225,6 +225,56 @@ test_unknown_reviewer_fails() {
   rm -rf "$work_dir"
 }
 
+test_empty_plan_rejected() {
+  local work_dir config
+  work_dir=$(mktemp -d)
+  config=$(setup_config "$work_dir")
+
+  # plan.md exists but is empty
+  touch "$work_dir/plan.md"
+
+  set +e
+  bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
+  local exit_code=$?
+  set -e
+
+  [ "$exit_code" -ne 0 ] || { rm -rf "$work_dir"; return 1; }
+
+  rm -rf "$work_dir"
+}
+
+test_npx_fallback() {
+  local work_dir config
+  work_dir=$(setup_work_dir)
+  config=$(setup_config "$work_dir")
+
+  # Build a minimal PATH containing only our fake npx (no acpx).
+  # We use an isolated dir to prevent the system acpx from being found.
+  local fake_dir="$work_dir/fake-bin"
+  mkdir -p "$fake_dir"
+
+  local mock_path="$MOCK"
+  # fake npx: invoked as "npx acpx@latest ..."; shift past package arg then run mock
+  printf '#!/bin/bash\nshift\nexec bash "%s" "$@"\n' "$mock_path" > "$fake_dir/npx"
+  chmod +x "$fake_dir/npx"
+
+  # Build a sanitized PATH: only essential system dirs + our fake-bin, no acpx
+  local safe_path="/usr/bin:/bin:$fake_dir"
+
+  # Verify our fake-bin has npx but NOT acpx
+  PATH="$safe_path" command -v npx > /dev/null 2>&1 || { rm -rf "$work_dir"; return 1; }
+  PATH="$safe_path" command -v acpx > /dev/null 2>&1 && { rm -rf "$work_dir"; return 1; }  # fail if acpx found
+
+  PATH="$safe_path" \
+  MOCK_ACPX_RESPONSE="VERDICT: APPROVED" \
+    bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
+
+  [ "$(cat "$work_dir/test-reviewer-exit.txt")" = "0" ] || { rm -rf "$work_dir"; return 1; }
+  grep -q "VERDICT: APPROVED" "$work_dir/test-reviewer-output.md" || { rm -rf "$work_dir"; return 1; }
+
+  rm -rf "$work_dir"
+}
+
 test_timeout_override() {
   local work_dir config
   work_dir=$(setup_work_dir)
@@ -263,6 +313,8 @@ run_test "acpx failure populates output" test_acpx_failure_populates_output
 run_test "empty response detected" test_empty_response_detected
 run_test "missing config fails" test_missing_config_fails
 run_test "missing plan fails" test_missing_plan_fails
+run_test "empty plan rejected" test_empty_plan_rejected
+run_test "npx fallback" test_npx_fallback
 run_test "unknown reviewer fails" test_unknown_reviewer_fails
 run_test "timeout override" test_timeout_override
 

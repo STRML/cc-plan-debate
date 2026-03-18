@@ -163,6 +163,60 @@ test_invalid_review_id_rejected() {
   [ "$exit_code" -ne 0 ] || return 1
 }
 
+test_reviewer_name_sanitization() {
+  # Reviewer names with path traversal or spaces should be skipped, not cause errors
+  local tmp_dir review_id work_dir
+  tmp_dir=$(mktemp -d)
+  review_id="test-$(date +%s)-san"
+  work_dir=".tmp/ai-review-${review_id}"
+
+  cat > "$tmp_dir/config.json" << 'EOF'
+{
+  "reviewers": {
+    "../evil": { "agent": "codex", "timeout": 10 },
+    "good": { "agent": "codex", "timeout": 10 }
+  }
+}
+EOF
+
+  mkdir -p "$work_dir"
+  echo "Test plan" > "$work_dir/plan.md"
+
+  PATH="$SCRIPT_DIR:$PATH" \
+  MOCK_ACPX_RESPONSE="VERDICT: APPROVED" \
+    bash "$PARALLEL" "$tmp_dir/config.json" "$review_id" 2>/dev/null
+
+  # Evil reviewer should be skipped — no exit file with "../evil" in path
+  [ ! -f "$work_dir/../evil-exit.txt" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
+
+  # Good reviewer should still run
+  [ -f "$work_dir/good-exit.txt" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
+
+  rm -rf "$work_dir" "$tmp_dir"
+}
+
+test_whitespace_trimmed_reviewer_list() {
+  # "/debate:all codex, gemini" (space after comma) should work correctly
+  local tmp_dir review_id work_dir
+  tmp_dir=$(setup_env)
+  review_id="test-$(date +%s)-trim"
+  work_dir=".tmp/ai-review-${review_id}"
+
+  mkdir -p "$work_dir"
+  echo "Test plan" > "$work_dir/plan.md"
+
+  # Pass "alpha, beta" with a space after the comma
+  PATH="$SCRIPT_DIR:$PATH" \
+  MOCK_ACPX_RESPONSE="VERDICT: APPROVED" \
+    bash "$PARALLEL" "$tmp_dir/config.json" "$review_id" "alpha, beta" 2>/dev/null
+
+  # Both should have run despite the space
+  [ -f "$work_dir/alpha-exit.txt" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
+  [ -f "$work_dir/beta-exit.txt" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
+
+  rm -rf "$work_dir" "$tmp_dir"
+}
+
 # --- Run ---
 
 echo ""
@@ -180,6 +234,8 @@ run_test "missing plan fails" test_missing_plan_fails
 run_test "missing config fails" test_missing_config_fails
 run_test "prompt files cleaned up" test_prompt_files_cleaned_up
 run_test "invalid review ID rejected" test_invalid_review_id_rejected
+run_test "reviewer name sanitization" test_reviewer_name_sanitization
+run_test "whitespace trimmed reviewer list" test_whitespace_trimmed_reviewer_list
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ($(( PASS + FAIL )) total) ==="

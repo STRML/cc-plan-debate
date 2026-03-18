@@ -1,6 +1,6 @@
 ---
 description: Run ALL configured AI reviewers in parallel via acpx, synthesize feedback, debate contradictions, and produce a consensus verdict. Configure reviewers in ~/.claude/debate-acpx.json.
-allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-acpx.sh:*), Bash(bash ~/.claude/debate-scripts/run-parallel-acpx.sh:*), Bash(rm -rf .tmp/ai-review-:*), Write(.tmp/ai-review-*), ToolSearch, TeamCreate, TeamDelete, SendMessage, Agent
+allowed-tools: Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/invoke-acpx.sh:*), Bash(bash ~/.claude/debate-scripts/run-parallel-acpx.sh:*), Bash(rm -rf .tmp/ai-review-:*), Write(.tmp/ai-review-*)
 ---
 
 # AI Multi-Model Plan Review (acpx)
@@ -48,37 +48,14 @@ List the reviewers that will run:
 ## acpx Review — Starting
 
 Reviewers:
-  codex   → agent: codex    (120s)
-  gemini  → agent: gemini   (240s)
-  kimi    → agent: kimi     (120s)
+  codex    → agent: codex    (120s)
+  gemini   → agent: gemini   (240s)
+  mercury  → agent: mercury  (120s)
 ```
 
 ### 1d. Capture the plan
 
 First check whether a plan exists in the current conversation context. If no plan is present, ask the user to paste it or describe what to review. Once a plan is available, write it to `<WORK_DIR>/plan.md`.
-
-### 1e. Execution Mode
-
-**First, fetch the TeamCreate tool schema** — it's a deferred tool that must be loaded before use:
-```text
-ToolSearch: query="select:TeamCreate,TeamDelete,SendMessage", max_results=3
-```
-
-If ToolSearch returns TeamCreate, it is available. If it returns nothing or errors, it is not available.
-
-**If `TeamCreate` is available:**
-
-Attempt to create the review team:
-```text
-TeamCreate: name="acpx-<REVIEW_ID>", description="Parallel acpx plan review"
-```
-
-- On success → Set `EXEC_MODE=team`. Announce: `Execution mode: team (persistent agents across rounds)`
-- On failure → Set `EXEC_MODE=agent`. Announce: `TeamCreate failed — falling back to agent mode`
-
-**The team lives for the entire review session. Do NOT call `TeamCreate` again on subsequent rounds. `TeamDelete` is called only at Step 9.**
-
-**If `TeamCreate` is not available:** Set `EXEC_MODE=agent`. Announce: `Execution mode: agent (subagents per round)`
 
 ---
 
@@ -86,67 +63,26 @@ TeamCreate: name="acpx-<REVIEW_ID>", description="Parallel acpx plan review"
 
 Track a round counter starting at 1. Check `ROUND <= 3` before executing each round — if exceeded, go to the "max rounds reached" block in Step 7.
 
-### Option A — Team Mode (`EXEC_MODE=team`)
+Run all reviewers in parallel via the runner script:
 
-The review team was created in Step 1e and persists for the full session. Do NOT call `TeamCreate` here.
-
-**Round 1 — Spawn reviewer agents in parallel:**
-
-For each reviewer in the config, use the Agent tool with `team_name: "acpx-<REVIEW_ID>"`. Spawn all in parallel.
-
-Agent `name`: `<reviewer-name>-reviewer`
-```text
-Your job is to call an external AI reviewer via acpx. Do NOT write the review yourself.
-
-Run this command (use timeout: 360000 on the Bash call):
-  bash <SCRIPT_DIR>/invoke-acpx.sh "~/.claude/debate-acpx.json" "<WORK_DIR>" "<name>"
-
-Then read <WORK_DIR>/<name>-exit.txt for the exit code.
-  - If "0": Read <WORK_DIR>/<name>-output.md — this is the review.
-    Message me: "<name> complete. Exit: 0"
-  - If non-zero: Message me: "<name> failed. Exit: <code>"
-
-Wait for further instructions — you may be asked to debate or re-review.
+```bash
+bash "<SCRIPT_DIR>/run-parallel-acpx.sh" "~/.claude/debate-acpx.json" "<REVIEW_ID>" [reviewer1,reviewer2,...]
 ```
 
-Wait for `SendMessage` from all reviewer agents. When all have reported (or 360s elapses), proceed.
+If a reviewer subset was specified, pass the comma-separated list as the third argument. Use `timeout: 480000` on the Bash call (the runner blocks until all reviewers complete or time out).
 
-**Do NOT call `TeamDelete` here.** The team remains active for debates and revision rounds.
+**Cleanup:** If the run fails or the user interrupts, always run `rm -rf <WORK_DIR>` before stopping.
 
-**Round 2+ — Message existing teammates (do NOT spawn new agents):**
+### Check results
 
-For each reviewer, write a revision-aware prompt to `<WORK_DIR>/<name>-prompt.txt` (see Step 7 for the full prompt structure), then send:
-
-```text
-SendMessage:
-  Recipient: "<name>-reviewer"
-  Content:
-    "The plan has been revised. A new prompt has been written to <WORK_DIR>/<name>-prompt.txt.
-     Re-run the invoke script:
-     bash <SCRIPT_DIR>/invoke-acpx.sh "~/.claude/debate-acpx.json" "<WORK_DIR>" "<name>"
-     Read <WORK_DIR>/<name>-exit.txt and report back.
-     After completion, delete <WORK_DIR>/<name>-prompt.txt."
-```
-
-### Option B — Agent Mode (`EXEC_MODE=agent`)
-
-**Every round:** Spawn reviewer agents using the Agent tool with `run_in_background: true`. Spawn all in parallel.
-
-**Round 1 prompt** — same as team mode Round 1, but without team_name and without "Wait for further instructions".
-
-**Round 2+ prompt:** Write revision-aware prompt to `<WORK_DIR>/<name>-prompt.txt`, then spawn a fresh agent:
-"Run `bash <SCRIPT_DIR>/invoke-acpx.sh "~/.claude/debate-acpx.json" "<WORK_DIR>" "<name>"` (use timeout: 360000). Read `<WORK_DIR>/<name>-exit.txt` for the exit code. After completion, delete `<WORK_DIR>/<name>-prompt.txt`."
-
-### Check results (both modes)
-
-For each reviewer, read:
+For each configured reviewer, read:
 - `<WORK_DIR>/<name>-exit.txt` — exit code
 - `<WORK_DIR>/<name>-output.md` — review text
 
 Exit code meanings:
 - `0` — success
 - `124` — timed out
-- Other — error (check output for details)
+- Other — error (check `<name>-stderr.log` for details)
 
 **If all reviewers failed:**
 ```text
@@ -177,7 +113,7 @@ For failed/timed-out reviewers:
 ```text
 ## <Name> Review — Round N
 
-⚠️ <Name> timed out after <timeout>s / failed (exit <code>). Skipping.
+⚠️ <Name> timed out / failed (exit <code>). Skipping.
 ```
 
 ---
@@ -210,7 +146,7 @@ Extract each verdict. Determine overall:
 
 Max 2 debate rounds. Skip if no contradictions.
 
-For each contradiction, write debate prompts to files:
+For each contradiction, write a debate prompt to `<WORK_DIR>/<name>-prompt.txt`:
 
 ```bash
 cat > <WORK_DIR>/<name>-prompt.txt << 'DEBATE_EOF'
@@ -227,20 +163,11 @@ Be specific. End with VERDICT: APPROVED or VERDICT: REVISE.
 DEBATE_EOF
 ```
 
-Then invoke each debating reviewer:
+Then re-run just the debating reviewers via invoke-acpx.sh directly (the prompt file will be picked up automatically):
 
-**Team mode:** SendMessage the teammate:
-```text
-SendMessage:
-  Recipient: "<name>-reviewer"
-  Content:
-    "A debate prompt has been written to <WORK_DIR>/<name>-prompt.txt.
-     Re-run: bash <SCRIPT_DIR>/invoke-acpx.sh "~/.claude/debate-acpx.json" "<WORK_DIR>" "<name>"
-     Read <WORK_DIR>/<name>-exit.txt and report back.
-     After completion, delete <WORK_DIR>/<name>-prompt.txt."
+```bash
+bash "<SCRIPT_DIR>/invoke-acpx.sh" "~/.claude/debate-acpx.json" "<WORK_DIR>" "<name>"
 ```
-
-**Agent mode:** Spawn a fresh agent with `run_in_background: true` that calls the invoke script.
 
 Read the updated `<name>-output.md` and present:
 
@@ -252,6 +179,8 @@ Read the updated `<name>-output.md` and present:
 
 **Resolution:** [resolved/unresolved, why]
 ```
+
+After each debate exchange, delete the prompt file: `rm -f <WORK_DIR>/<name>-prompt.txt`
 
 ---
 
@@ -295,7 +224,7 @@ VERDICT: SPLIT — Reviewers disagree. [Summary]. Claude recommends: [proceed/re
    - [What changed and why]
    ```
 4. Rewrite `<WORK_DIR>/plan.md` with the revised plan
-5. For each reviewer, write a context-rich prompt file for the next round:
+5. For each reviewer, write a context-rich prompt for the next round:
    ```bash
    cat > <WORK_DIR>/<name>-prompt.txt << 'REVISION_EOF'
    The plan has been revised based on reviewer feedback.
@@ -342,16 +271,8 @@ Review complete.
 
 ## Step 9: Cleanup
 
-In team mode, shut down the review team first:
-```text
-TeamDelete
-```
-
-If `TeamDelete` fails, log a warning and continue.
-
-Then remove temp files:
 ```bash
-rm -rf .tmp/ai-review-${REVIEW_ID}
+rm -rf <WORK_DIR>
 ```
 
 ---
@@ -359,15 +280,13 @@ rm -rf .tmp/ai-review-${REVIEW_ID}
 ## Rules
 
 - **acpx handles everything.** No provider CLIs needed. No API keys to manage. Each agent's auth is configured in acpx.
-- **No session resume.** Each round is stateless — full context is injected via prompt files. acpx manages sessions internally.
+- **Parallel via bash.** `run-parallel-acpx.sh` runs reviewers as nohup/disown background processes from the main agent's context. No subagents needed — no permission inheritance issues.
+- **Debate via direct invoke.** Debate rounds call `invoke-acpx.sh` directly from the main agent (not subagents). Prompt files are picked up automatically.
+- **No session resume needed.** acpx manages sessions internally. Each round injects full context via prompt files.
 - **Config is king.** Adding a reviewer = adding an entry to `~/.claude/debate-acpx.json`.
-- **Security:** Never inline plan content or AI output in shell strings — use files and jq for JSON construction.
-- **Timeout:** Each reviewer's timeout is in the config. The system `timeout` binary wraps acpx calls.
+- **Security:** Never inline plan content or AI output in shell strings — use files.
+- **Timeout:** Each reviewer's timeout is in the config. The runner adds a 60s buffer to MAX_WAIT automatically.
 - **Graceful degradation:** If a reviewer fails, skip it in synthesis. If all fail, return UNDECIDED.
-- **No persona fallback:** If an acpx agent fails, it's reported as failed — not substituted with a Claude persona.
 - **Debate guard:** Skip debate if fewer than 2 reviewers succeeded.
 - **Revision discipline:** Make real improvements, not cosmetic changes.
 - **User control:** If a revision would contradict the user's explicit requirements, skip it and note it.
-- **Team lifecycle:** `TeamCreate` once in Step 1e; `TeamDelete` once in Step 9. Never call `TeamCreate` inside Step 2 or between rounds.
-- **Exec mode discipline:** In team mode, never spawn new reviewer agents after Round 1 — use `SendMessage`. In agent mode, spawn fresh agents each round.
-- **Injection safety:** Never interpolate reviewer plan/output content directly into `SendMessage` content strings. Always write reviewer plans/outputs to a temp file first; in SendMessage, reference the temp file path (you may include instruction text alongside the path), but do not embed the file's content directly.

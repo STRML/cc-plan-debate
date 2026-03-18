@@ -92,7 +92,35 @@ LiteLLM routed API calls to arbitrary models. With acpx, each reviewer maps to a
 }
 ```
 
-If you were using LiteLLM to access models that **don't** have a native acpx agent (e.g., DeepSeek, Mercury, Mixtral), you can still use them via the **opencode + OpenRouter** bridge. See [Using OpenRouter models via opencode](#using-openrouter-models-via-opencode) below.
+If you were using LiteLLM to access models that **don't** have a native acpx agent (e.g., DeepSeek, local models via Ollama, Mixtral), you can still access them through your LiteLLM proxy using the **opencode + LiteLLM** bridge. The chain is:
+
+```
+acpx → opencode (custom agent) → LiteLLM proxy → your model
+```
+
+**Important:** opencode resolves model IDs against its built-in OpenAI model list. The model alias you configure must be a known OpenAI model name (e.g., `gpt-4o-mini`). Configure LiteLLM to route that alias to your actual model:
+
+```yaml
+# LiteLLM config.yaml
+model_list:
+  - model_name: gpt-4o-mini         # alias opencode uses
+    litellm_params:
+      model: deepseek/deepseek-r1   # your actual model
+```
+
+Then create the acpx wrapper:
+
+```bash
+bash ~/.claude/debate-scripts/create-litellm-agent.sh \
+  deepseek \
+  http://localhost:8200/v1 \
+  gpt-4o-mini \
+  sk-litellm-optional-key
+```
+
+Or run `/debate:acpx-setup` to configure it interactively.
+
+See [Using LiteLLM models via opencode](#using-litellm-models-via-opencode) below.
 
 ### From OpenRouter (`~/.claude/debate-openrouter.json`)
 
@@ -183,6 +211,44 @@ After updating the plugin, re-run `/debate:setup` to refresh the `~/.claude/deba
 | `kilocode` | Kilocode | `npx @kilocode/cli` |
 
 See [acpx docs](https://github.com/openclaw/acpx) for the full and up-to-date list.
+
+## Using LiteLLM models via opencode
+
+Models accessible via a LiteLLM proxy (local models, self-hosted, or any provider LiteLLM supports) can be used through opencode as the ACP bridge:
+
+```text
+acpx → opencode (custom agent) → LiteLLM proxy → any model
+```
+
+**Model alias requirement:**
+
+opencode resolves model IDs against its built-in OpenAI list. Use a known OpenAI model name as the alias (e.g., `gpt-4o-mini`) and configure LiteLLM to route it to your actual model:
+
+```yaml
+# LiteLLM config.yaml
+model_list:
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: ollama/deepseek-r1
+      api_base: http://localhost:11434
+```
+
+**Setup:**
+
+1. Install opencode: `npm install -g opencode-ai`
+2. Run `bash ~/.claude/debate-scripts/create-litellm-agent.sh <name> <base_url> <model_alias> [api_key]`
+3. Add to `~/.claude/debate-acpx.json`:
+   ```json
+   "<name>": {
+     "agent": "<name>",
+     "timeout": 120,
+     "model_id": "<description> via LiteLLM"
+   }
+   ```
+
+**Or run `/debate:acpx-setup`** which walks through this interactively.
+
+---
 
 ## Using OpenRouter models via opencode
 

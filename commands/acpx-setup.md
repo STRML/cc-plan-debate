@@ -1,6 +1,6 @@
 ---
 description: Check acpx CLI installation, validate debate-acpx.json config, probe each configured agent, and print permission allowlist for unattended operation.
-allowed-tools: Bash(which acpx:*), Bash(which npx:*), Bash(which jq:*), Bash(which opencode:*), Bash(acpx:*), Bash(npx acpx@latest:*), Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(ls:*), Bash(chmod:*), Bash(mkdir:*), Write(~/.claude/debate-acpx.json), Write(~/.acpx/*), Write(~/.opencode.json)
+allowed-tools: Bash(which acpx:*), Bash(which npx:*), Bash(which jq:*), Bash(which opencode:*), Bash(acpx:*), Bash(npx acpx@latest:*), Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/create-litellm-agent.sh:*), Bash(ls:*), Bash(chmod:*), Bash(mkdir:*), Write(~/.claude/debate-acpx.json), Write(~/.acpx/*), Write(~/.opencode.json)
 ---
 
 # debate — acpx Setup Check
@@ -43,7 +43,7 @@ If neither `acpx` nor `npx`:
   ❌ acpx not found. Install: npm install -g acpx@latest
 ```
 
-Note whether `opencode` is available — it's needed for OpenRouter model access (Step 2c).
+Note whether `opencode` is available — it's needed for OpenRouter model access (Step 2c) and LiteLLM proxy access (Step 2d).
 
 Both `acpx` (or `npx`) and `jq` are required. Use `ACPX_CMD` for all subsequent acpx invocations in this command.
 
@@ -70,7 +70,7 @@ Guide the user through creating a config.
 
 **2a. Ask what agents the user wants:**
 
-Present two categories:
+Present three categories:
 
 ```text
 ### Reviewer options
@@ -89,13 +89,19 @@ Built-in acpx agents (need the agent CLI installed):
 OpenRouter models via opencode (need opencode + OpenRouter API key):
   Any model on OpenRouter — DeepSeek, Mercury, Kimi, Mixtral, GPT, etc.
   These run through: acpx → opencode → OpenRouter → model
+
+LiteLLM proxy via opencode (need opencode + a running LiteLLM proxy):
+  Any model accessible via your LiteLLM proxy — local models (Ollama, LM Studio),
+  self-hosted, or any provider LiteLLM supports.
+  These run through: acpx → opencode → LiteLLM proxy → model
 ```
 
-"Pick 2-4 reviewers. For independent perspectives inside Claude, skip the `claude` agent. If you want models from OpenRouter, I'll set those up via opencode."
+"Pick 2-4 reviewers. For independent perspectives inside Claude, skip the `claude` agent. If you want models from OpenRouter or via LiteLLM, I'll set those up via opencode."
 
 **2b. For each selected reviewer, determine the type:**
 - If the user picks a built-in acpx agent name → type: `built-in`
 - If the user picks an OpenRouter model (or a model name that isn't a built-in agent) → type: `openrouter`
+- If the user picks a LiteLLM-routed model → type: `litellm`
 
 **2c. For OpenRouter reviewers — set up opencode wrappers:**
 
@@ -159,7 +165,39 @@ Register the custom agent in `~/.acpx/config.json`. Read the existing config fir
 
 Use absolute paths in the command field — acpx exec's the command directly.
 
-**2d. Write the debate config:**
+**2d. For LiteLLM reviewers — set up opencode wrappers:**
+
+This requires `opencode` to be installed (same check as Step 2c above).
+
+For each LiteLLM reviewer, ask for:
+1. A short name (e.g., `deepseek`, `local-llama`, `mixtral`)
+2. The LiteLLM proxy base URL (default: `http://localhost:8200/v1`)
+3. A model alias — an OpenAI model name that opencode recognizes (default: `gpt-4o-mini`). LiteLLM must be configured to route this alias to your actual model.
+4. An API key (optional — leave blank or say "none" if your proxy doesn't require one)
+
+Explain the alias requirement:
+```text
+  LiteLLM works by aliasing model names. opencode needs to look up the model in its
+  built-in list, so the alias must be a known OpenAI model name (gpt-4o-mini is a
+  safe default). Configure LiteLLM to route that alias to your actual model:
+
+  # Example LiteLLM config.yaml
+  model_list:
+    - model_name: gpt-4o-mini       ← alias opencode will use
+      litellm_params:
+        model: ollama/deepseek-r1   ← your actual model
+        api_base: http://localhost:11434
+```
+
+Run the helper script to create the wrapper:
+
+```bash
+bash ~/.claude/debate-scripts/create-litellm-agent.sh "<name>" "<base_url>" "<model_alias>" "<api_key>"
+```
+
+This creates `~/.acpx/agents/<name>/start.sh` and registers the agent in `~/.acpx/config.json`.
+
+**2e. Write the debate config:**
 
 Write `~/.claude/debate-acpx.json` with all selected reviewers. For OpenRouter reviewers, include a `model_id` field so the summary and future setup checks can display the underlying model:
 
@@ -172,7 +210,7 @@ Write `~/.claude/debate-acpx.json` with all selected reviewers. For OpenRouter r
 }
 ```
 
-Built-in agents do not need `model_id`. OpenRouter agents (created via Step 2c) must have it set to the OpenRouter model ID (e.g., `inception/mercury-2`).
+Built-in agents do not need `model_id`. OpenRouter agents (created via Step 2c) must have it set to the OpenRouter model ID (e.g., `inception/mercury-2`). LiteLLM agents (created via Step 2d) should set it to a descriptive string like `"deepseek-r1 via LiteLLM"` so the summary can display the underlying model.
 
 Set timeout to 240-300 for larger/slower agents, 120 for faster ones.
 
@@ -270,13 +308,13 @@ To run /debate:all without approval prompts, add to ~/.claude/settings.json:
 
 ## Step 6: Print summary
 
-For each reviewer, read `~/.claude/debate-acpx.json`. For built-in agents show `built-in`; for custom agents show `openrouter` and append ` — openrouter/<model_id>` if `model_id` is present in the config entry.
+For each reviewer, read `~/.claude/debate-acpx.json`. For built-in agents show `built-in`; for OpenRouter agents show `openrouter` and append ` — openrouter/<model_id>`; for LiteLLM agents show `litellm` and append ` — <model_id>` if present.
 
 ```text
 ### Summary
 
   acpx:     ✅ ready
-  opencode: ✅ ready (enables OpenRouter models)
+  opencode: ✅ ready (enables OpenRouter and LiteLLM models)
   Config:   ✅ valid (N reviewers)
   jq:       ✅ ready
   Scripts:  ✅ symlinked
@@ -285,6 +323,7 @@ For each reviewer, read `~/.claude/debate-acpx.json`. For built-in agents show `
     codex    ✅ built-in    (120s timeout)
     gemini   ✅ built-in    (240s timeout)
     mercury  ✅ openrouter  (120s timeout) — openrouter/inception/mercury-2
+    deepseek ✅ litellm     (120s timeout) — deepseek-r1 via LiteLLM
 
 You are ready to run:
   /debate:all                     — parallel review via acpx

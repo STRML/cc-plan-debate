@@ -76,7 +76,7 @@ Claude: Re-submitting to all reviewers...
 - The agent CLIs for whatever reviewers you want (see [Supported Agents](#supported-agents) below)
 
 **Optional:**
-- [opencode](https://opencode.ai) — only needed for OpenRouter model access (DeepSeek, Mercury, Kimi, etc.)
+- [opencode](https://opencode.ai) — only needed for OpenRouter model access (DeepSeek, Mercury, Kimi, etc.) or LiteLLM proxy access (local models, self-hosted, etc.)
 
 ---
 
@@ -180,6 +180,65 @@ Then add to `~/.claude/debate-acpx.json`:
 | Mistral Large | `mistralai/mistral-large` | Good architecture instincts |
 | GPT-4.1 | `openai/gpt-4.1` | Broad coverage |
 | Gemini 2.5 Pro | `google/gemini-2.5-pro` | Strong if you don't have Gemini CLI |
+
+### Any model via LiteLLM (using opencode)
+
+For local models (Ollama, LM Studio), self-hosted endpoints, or any provider that [LiteLLM](https://github.com/BerriAI/litellm) supports, you can route through a LiteLLM proxy using opencode as the bridge:
+
+```
+acpx → opencode (custom agent) → LiteLLM proxy → any model
+```
+
+**Prerequisites:**
+- `npm install -g opencode-ai`
+- A running LiteLLM proxy (`pip install litellm[proxy]` + `litellm --config config.yaml`)
+
+**Model alias requirement:**
+
+opencode resolves model IDs against its built-in OpenAI model list, so the model name you give it must be a known OpenAI model name (e.g. `gpt-4o-mini`). Configure LiteLLM to route that alias to your actual model:
+
+```yaml
+# LiteLLM config.yaml
+model_list:
+  - model_name: gpt-4o-mini         # alias opencode uses
+    litellm_params:
+      model: ollama/deepseek-r1     # your actual model
+      api_base: http://localhost:11434
+```
+
+**Setup (one time per agent):**
+
+> **Tip:** Just run `/debate:acpx-setup` — it does all of this for you interactively.
+
+Or manually:
+
+```bash
+# Run the helper script
+bash ~/.claude/debate-scripts/create-litellm-agent.sh \
+  deepseek \
+  http://localhost:8200/v1 \
+  gpt-4o-mini \
+  sk-litellm-optional-key
+```
+
+Then add to `~/.claude/debate-acpx.json`:
+```json
+"deepseek": {
+  "agent": "deepseek",
+  "timeout": 120,
+  "model_id": "deepseek-r1 via LiteLLM",
+  "system_prompt": "You are The Pragmatist..."
+}
+```
+
+**Arguments to `create-litellm-agent.sh`:**
+
+| Arg | Required | Example |
+|-----|----------|---------|
+| `name` | Yes | `deepseek` |
+| `base_url` | Yes | `http://localhost:8200/v1` |
+| `model_alias` | Yes | `gpt-4o-mini` (must be a known OpenAI model name) |
+| `api_key` | No | `sk-litellm-abc123` (omit if proxy has no auth) |
 
 ---
 

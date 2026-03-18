@@ -43,11 +43,11 @@ fi
 
 # --- Resolve acpx binary (support npx fallback) ---
 
-ACPX_BIN=""
+ACPX_BIN=()
 if command -v acpx > /dev/null 2>&1; then
-  ACPX_BIN="acpx"
+  ACPX_BIN=(acpx)
 elif command -v npx > /dev/null 2>&1; then
-  ACPX_BIN="npx acpx@latest"
+  ACPX_BIN=(npx acpx@latest)
 else
   echo "invoke-acpx: acpx not found. Install: npm install -g acpx@latest" >&2
   # Write a meaningful exit file if we can
@@ -156,7 +156,7 @@ ACPX_CMD=()
 if [ -n "$TIMEOUT_BIN" ] && [ "$TIMEOUT" -gt 0 ]; then
   ACPX_CMD+=("$TIMEOUT_BIN" "$TIMEOUT")
 fi
-ACPX_CMD+=($ACPX_BIN --format quiet --approve-reads "$AGENT" --file "$PROMPT_FILE")
+ACPX_CMD+=("${ACPX_BIN[@]}" --format quiet --approve-reads "$AGENT" --file "$PROMPT_FILE")
 
 set +e
 "${ACPX_CMD[@]}" > "$WORK_DIR/${REVIEWER}-output.md" 2>"$WORK_DIR/${REVIEWER}-stderr.log"

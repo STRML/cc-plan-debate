@@ -127,14 +127,25 @@ while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
 done
 
 if [ "$ELAPSED" -ge "$MAX_WAIT" ]; then
-  echo "[debate] Timed out waiting for reviewers after ${MAX_WAIT}s. Killing orphaned processes..." >&2
+  echo "[debate] Timed out waiting for reviewers after ${MAX_WAIT}s. Sending SIGTERM..." >&2
   for pid in "${PIDS[@]}"; do
-    # Kill the process group first (catches children), then the process itself
-    kill -- -"$pid" 2>/dev/null || true
     kill "$pid" 2>/dev/null || true
   done
-  # Brief wait for processes to exit
-  sleep 1
+  # Give child EXIT traps ~3s to write exit files before escalating
+  local_wait=0
+  while [ "$local_wait" -lt 3 ]; do
+    alive=0
+    for pid in "${PIDS[@]}"; do
+      kill -0 "$pid" 2>/dev/null && alive=1
+    done
+    [ "$alive" -eq 0 ] && break
+    sleep 1
+    local_wait=$(( local_wait + 1 ))
+  done
+  # Escalate any survivors to SIGKILL
+  for pid in "${PIDS[@]}"; do
+    kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null || true
+  done
   rm -f "$WORK_DIR"/*-prompt.txt
   exit 1
 else

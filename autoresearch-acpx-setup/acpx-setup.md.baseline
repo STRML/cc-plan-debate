@@ -161,18 +161,16 @@ Use absolute paths in the command field — acpx exec's the command directly.
 
 **2d. Write the debate config:**
 
-Write `~/.claude/debate-acpx.json` with all selected reviewers. For OpenRouter reviewers, include a `model_id` field so the summary and future setup checks can display the underlying model:
+Write `~/.claude/debate-acpx.json` with all selected reviewers:
 
 ```json
 {
   "reviewers": {
     "codex": { "agent": "codex", "timeout": 120, "system_prompt": "..." },
-    "mercury": { "agent": "mercury", "timeout": 120, "model_id": "inception/mercury-2", "system_prompt": "..." }
+    "mercury": { "agent": "mercury", "timeout": 120, "system_prompt": "..." }
   }
 }
 ```
-
-Built-in agents do not need `model_id`. OpenRouter agents (created via Step 2c) must have it set to the OpenRouter model ID (e.g., `inception/mercury-2`).
 
 Set timeout to 240-300 for larger/slower agents, 120 for faster ones.
 
@@ -270,8 +268,6 @@ To run /debate:all without approval prompts, add to ~/.claude/settings.json:
 
 ## Step 6: Print summary
 
-For each reviewer, read `~/.claude/debate-acpx.json`. For built-in agents show `built-in`; for custom agents show `openrouter` and append ` — openrouter/<model_id>` if `model_id` is present in the config entry.
-
 ```text
 ### Summary
 
@@ -284,7 +280,7 @@ For each reviewer, read `~/.claude/debate-acpx.json`. For built-in agents show `
   Reviewers:
     codex    ✅ built-in    (120s timeout)
     gemini   ✅ built-in    (240s timeout)
-    mercury  ✅ openrouter  (120s timeout) — openrouter/inception/mercury-2
+    mercury  ✅ openrouter  (120s timeout, inception/mercury-2)
 
 You are ready to run:
   /debate:all                     — parallel review via acpx

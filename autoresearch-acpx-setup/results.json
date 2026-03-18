@@ -1,0 +1,32 @@
+{
+  "skill_name": "acpx-setup",
+  "status": "complete",
+  "current_experiment": 1,
+  "baseline_score": 86.7,
+  "best_score": 100.0,
+  "experiments": [
+    {
+      "id": 0,
+      "score": 13,
+      "max_score": 15,
+      "pass_rate": 86.7,
+      "status": "baseline",
+      "description": "original skill — no changes"
+    },
+    {
+      "id": 1,
+      "score": 15,
+      "max_score": 15,
+      "pass_rate": 100.0,
+      "status": "keep",
+      "description": "add model_id field to OpenRouter reviewer config entries so summary can display underlying model"
+    }
+  ],
+  "eval_breakdown": [
+    {"name": "Agent probe", "pass_count": 3, "total": 3},
+    {"name": "Gemini API key guidance", "pass_count": 2, "total": 2},
+    {"name": "OpenRouter wrapper completeness", "pass_count": 2, "total": 2},
+    {"name": "Permission allowlist", "pass_count": 3, "total": 3},
+    {"name": "Final summary completeness", "pass_count": 5, "total": 5}
+  ]
+}

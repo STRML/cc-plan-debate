@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.2] — 2026-03-18
+
+### Fixed
+
+- **Session management** — replaced `sessions new` (always creates a new session, accumulates over time) with `sessions ensure` (idempotent: creates if none exists for the cwd, reuses if one does). Each agent's sessions are namespaced independently, so multiple reviewers in the same cwd don't conflict.
+
+---
+
 ## [2.0.1] — 2026-03-18
 
 ### Added

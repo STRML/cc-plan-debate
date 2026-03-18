@@ -12,12 +12,13 @@
 # It reads the --file argument to verify it exists, then outputs the response.
 #
 # Session subcommands:
-#   MOCK_ACPX_SESSION_LIST_EXIT — exit code for `<agent> sessions list` (default: 0)
-#   MOCK_ACPX_SESSION_NEW_EXIT  — exit code for `<agent> sessions new`  (default: 0)
+#   MOCK_ACPX_SESSION_LIST_EXIT   — exit code for `<agent> sessions list`   (default: 0)
+#   MOCK_ACPX_SESSION_NEW_EXIT    — exit code for `<agent> sessions new`     (default: 0)
+#   MOCK_ACPX_SESSION_ENSURE_EXIT — exit code for `<agent> sessions ensure`  (default: 0)
 #
-# When invoked as `acpx <agent> sessions list|new`, returns the configured exit code.
+# When invoked as `acpx <agent> sessions list|new|ensure`, returns the configured exit code.
 
-# Handle session subcommands: acpx <agent> sessions <list|new>
+# Handle session subcommands: acpx <agent> sessions <list|new|ensure>
 if [ $# -ge 3 ] && [ "$2" = "sessions" ]; then
   LOG="${MOCK_ACPX_LOG:-}"
   if [ -n "$LOG" ]; then
@@ -29,6 +30,9 @@ if [ $# -ge 3 ] && [ "$2" = "sessions" ]; then
       ;;
     new)
       exit "${MOCK_ACPX_SESSION_NEW_EXIT:-0}"
+      ;;
+    ensure)
+      exit "${MOCK_ACPX_SESSION_ENSURE_EXIT:-0}"
       ;;
   esac
 fi

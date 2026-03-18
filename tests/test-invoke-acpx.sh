@@ -305,39 +305,36 @@ test_timeout_override() {
 # --- Session check tests ---
 
 test_session_auto_created() {
-  # When session list fails (exit 1), invoke should auto-create and proceed
+  # sessions ensure creates a session when none exists, then proceeds
   local work_dir config
   work_dir=$(setup_work_dir)
   config=$(setup_config "$work_dir")
   local log_file="$work_dir/acpx-log.txt"
 
   PATH="$SCRIPT_DIR:$PATH" \
-  MOCK_ACPX_SESSION_LIST_EXIT=1 \
-  MOCK_ACPX_SESSION_NEW_EXIT=0 \
+  MOCK_ACPX_SESSION_ENSURE_EXIT=0 \
   MOCK_ACPX_RESPONSE="Great plan! VERDICT: APPROVED" \
   MOCK_ACPX_LOG="$log_file" \
     bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
 
-  # Should succeed despite session list failing
   [ "$(cat "$work_dir/test-reviewer-exit.txt")" = "0" ] || return 1
   grep -q "VERDICT: APPROVED" "$work_dir/test-reviewer-output.md" || return 1
 
-  # Log should show sessions new was called (agent name appears in session commands)
-  grep -q "sessions" "$log_file" || return 1
+  # Log should show sessions ensure was called
+  grep -q "sessions ensure" "$log_file" || return 1
 
   rm -rf "$work_dir"
 }
 
 test_session_creation_fails_exits_4() {
-  # When both session list and session new fail, should exit 4
+  # When sessions ensure fails, should exit 4
   local work_dir config
   work_dir=$(setup_work_dir)
   config=$(setup_config "$work_dir")
 
   set +e
   PATH="$SCRIPT_DIR:$PATH" \
-  MOCK_ACPX_SESSION_LIST_EXIT=1 \
-  MOCK_ACPX_SESSION_NEW_EXIT=1 \
+  MOCK_ACPX_SESSION_ENSURE_EXIT=1 \
   MOCK_ACPX_RESPONSE="should not reach this" \
     bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
   local exit_code=$?
@@ -356,22 +353,23 @@ test_session_creation_fails_exits_4() {
 }
 
 test_session_exists_no_extra_calls() {
-  # sessions new is always called before every review (even when sessions already exist)
+  # sessions ensure is idempotent: reuses existing session without creating a new one
   local work_dir config
   work_dir=$(setup_work_dir)
   config=$(setup_config "$work_dir")
   local log_file="$work_dir/acpx-log.txt"
 
   PATH="$SCRIPT_DIR:$PATH" \
-  MOCK_ACPX_SESSION_NEW_EXIT=0 \
+  MOCK_ACPX_SESSION_ENSURE_EXIT=0 \
   MOCK_ACPX_RESPONSE="VERDICT: APPROVED" \
   MOCK_ACPX_LOG="$log_file" \
     bash "$INVOKE" "$config" "$work_dir" "test-reviewer" 2>/dev/null
 
   [ "$(cat "$work_dir/test-reviewer-exit.txt")" = "0" ] || return 1
 
-  # sessions new must always be called — it's the reliable way to ensure a session exists
-  grep -q "sessions new" "$log_file" || return 1
+  # sessions ensure (not sessions new) is the call — idempotent, no session accumulation
+  grep -q "sessions ensure" "$log_file" || return 1
+  ! grep -q "sessions new" "$log_file" || return 1
 
   rm -rf "$work_dir"
 }

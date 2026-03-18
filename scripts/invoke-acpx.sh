@@ -104,21 +104,19 @@ fi
 CONFIG_TIMEOUT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].timeout // empty' "$CONFIG_FILE")
 CONFIG_SYSTEM_PROMPT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].system_prompt // empty' "$CONFIG_FILE")
 
-# --- Session creation: always create a session before running ---
-# acpx requires a session to exist. `sessions list` returns exit 0 with empty
-# output when no sessions exist, so we can't use it to detect the "no sessions"
-# case reliably. Instead, always call `sessions new` — it's idempotent enough
-# for our purposes and guarantees a valid session before each run.
+# --- Session setup: ensure a session exists for this agent ---
+# `sessions ensure` is idempotent: creates a session if none exists for the
+# current cwd, reuses one if it does. Avoids accumulating sessions on every run.
 # Skip if SKIP_SESSION_CHECK is set (for testing with mock acpx)
 
 if [ -z "${SKIP_SESSION_CHECK:-}" ]; then
-  echo "[$REVIEWER] Creating acpx session for '$AGENT'..." >&2
-  if ! "${ACPX_BIN[@]}" "$AGENT" sessions new > /dev/null 2>&1; then
-    echo "[$REVIEWER] Failed to create acpx session for '$AGENT'." >&2
+  echo "[$REVIEWER] Ensuring acpx session for '$AGENT'..." >&2
+  if ! "${ACPX_BIN[@]}" "$AGENT" sessions ensure > /dev/null 2>&1; then
+    echo "[$REVIEWER] Failed to ensure acpx session for '$AGENT'." >&2
     echo "  Check that the agent CLI is installed and authenticated." >&2
     echo "  Run /debate:acpx-setup to diagnose." >&2
     echo "4" > "$WORK_DIR/${REVIEWER}-exit.txt"
-    echo "Failed to create acpx session for '$AGENT'. Run /debate:acpx-setup to diagnose." > "$WORK_DIR/${REVIEWER}-output.md"
+    echo "Failed to ensure acpx session for '$AGENT'. Run /debate:acpx-setup to diagnose." > "$WORK_DIR/${REVIEWER}-output.md"
     trap - EXIT
     exit 4
   fi

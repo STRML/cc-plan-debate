@@ -78,11 +78,6 @@ LiteLLM routed API calls to arbitrary models. With acpx, each reviewer maps to a
 ```json
 {
   "reviewers": {
-    "opus": {
-      "agent": "claude",
-      "timeout": 300,
-      "system_prompt": "You are The Skeptic..."
-    },
     "codex": {
       "agent": "codex",
       "timeout": 120,
@@ -91,6 +86,8 @@ LiteLLM routed API calls to arbitrary models. With acpx, each reviewer maps to a
   }
 }
 ```
+
+> **Note:** If you were using LiteLLM to route to Claude (Opus/Sonnet), use `/debate:opus-review` instead — it talks to Claude directly via team mode and does not require acpx. The `claude` acpx agent is broken and not supported.
 
 If you were using LiteLLM to access models that **don't** have a native acpx agent (e.g., DeepSeek, local models via Ollama, Mixtral), you can still access them through your LiteLLM proxy using the **opencode + LiteLLM** bridge. The chain is:
 
@@ -200,7 +197,7 @@ After updating the plugin, re-run `/debate:setup` to refresh the `~/.claude/deba
 | Agent | Wraps | Install |
 |-------|-------|---------|
 | `codex` | OpenAI Codex CLI | `npm install -g @openai/codex` |
-| `claude` | Claude Code | Already installed |
+| ~~`claude`~~ | ~~Claude Code~~ | ⛔ Not supported via acpx — use `/debate:opus-review` instead |
 | `gemini` | Google Gemini CLI | `npm install -g @google/gemini-cli` |
 | `cursor` | Cursor CLI | Install Cursor IDE |
 | `copilot` | GitHub Copilot CLI | `gh extension install github/gh-copilot` |

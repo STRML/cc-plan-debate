@@ -72,7 +72,6 @@ Present three categories:
 
 Built-in acpx agents (need the agent CLI installed):
   codex    — OpenAI Codex        (npm install -g @openai/codex)
-  claude   — Claude Code         (already installed)
   gemini   — Google Gemini       (npm install -g @google/gemini-cli) ⚠️  needs GEMINI_API_KEY for acpx
   cursor   — Cursor CLI          (install Cursor IDE)
   copilot  — GitHub Copilot CLI  (gh extension install github/gh-copilot)
@@ -80,6 +79,9 @@ Built-in acpx agents (need the agent CLI installed):
   kiro     — Kiro CLI
   qwen     — Qwen Code
   opencode — OpenCode            (npm install -g opencode-ai)
+
+  ⛔ claude — NOT supported via acpx (internal error). Use /debate:opus-review for
+             Claude-as-reviewer instead — it talks to Claude directly via team mode.
 
 OpenRouter models via opencode (need opencode + OpenRouter API key):
   Any model on OpenRouter — DeepSeek, Mercury, Kimi, Mixtral, GPT, etc.

@@ -21,7 +21,7 @@ v2.0.0 replaces all provider-specific CLIs (codex, gemini, claude) and API-based
 |---------|-------------|
 | `/debate:all` | Now config-driven via `debate-acpx.json`. Shell mode removed. No more persona fallback. |
 | `/debate:opus-review` | Now uses `acpx claude` instead of direct `claude` CLI. No more `jq` dependency. |
-| `/debate:opus-review-subagent` | Unchanged — uses Task tool, no external process. |
+| `/debate:opus-review-subagent` | Merged into `/debate:opus-review` — no longer a separate command. |
 | `/debate:setup` | Simplified — checks for `acpx` and `jq` only. |
 
 ### New commands

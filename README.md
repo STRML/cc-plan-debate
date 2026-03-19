@@ -295,8 +295,7 @@ The value of multiple reviewers is getting genuinely different lenses. Some idea
 | `/debate:setup` | Check prerequisites, create `~/.claude/debate-scripts` symlink, detect v1.x configs and migrate, print permission allowlist |
 | `/debate:acpx-setup` | Interactive reviewer configuration: pick agents, set up OpenRouter models, probe connectivity |
 | `/debate:all [reviewers] [skip-debate]` | Run all (or specific) reviewers in parallel, synthesize, debate, iterate up to 3 rounds |
-| `/debate:opus-review` | Single-reviewer iterative loop with Claude Opus as The Skeptic, up to 5 rounds |
-| `/debate:opus-review-subagent` | One-shot Opus review via Claude's built-in Task tool — no CLI, no temp files, fastest option |
+| `/debate:opus-review` | Iterative Opus review loop — team mode (real conversation history) if available, subagent fallback otherwise. Up to 5 rounds. |
 
 ### `/debate:all` options
 

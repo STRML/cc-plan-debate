@@ -6,8 +6,7 @@ _Updated: 2026-03-17_
 | File | Slash Command | Purpose |
 |------|--------------|---------|
 | `all.md` | `/debate:all [reviewers] [skip-debate]` | Master: parallel review + synthesis + debate (up to 3 rounds) via acpx |
-| `opus-review.md` | `/debate:opus-review` | Single-reviewer Opus loop via acpx claude (up to 5 rounds) |
-| `opus-review-subagent.md` | `/debate:opus-review-subagent` | Single-round Opus review via Task tool subagent — no CLI, no temp files |
+| `opus-review.md` | `/debate:opus-review` | Iterative Opus loop (up to 5 rounds) — TeamCreate+SendMessage when available, Task subagent fallback |
 | `acpx-setup.md` | `/debate:acpx-setup` | Config setup: create/validate `~/.claude/debate-acpx.json`, probe agents |
 | `setup.md` | `/debate:setup` | Prerequisite check + stable symlink creation + settings snippet |
 
@@ -55,4 +54,4 @@ Available acpx agents: codex, claude, gemini, cursor, copilot, kimi, kiro, qwen,
 - `plugin.json` — name, version, description, author, license
 - `marketplace.json` — marketplace listing with install instructions
 
-Current version: **2.0.0**
+Current version: **2.0.2**

@@ -1,6 +1,6 @@
 ---
 description: Check acpx CLI installation, validate debate-acpx.json config, probe each configured agent, and print permission allowlist for unattended operation.
-allowed-tools: Bash(which acpx:*), Bash(which npx:*), Bash(which jq:*), Bash(which opencode:*), Bash(acpx:*), Bash(npx acpx@latest:*), Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/create-litellm-agent.sh:*), Bash(ls:*), Bash(chmod:*), Bash(mkdir:*), Write(~/.claude/debate-acpx.json), Write(~/.acpx/*), Write(~/.opencode.json)
+allowed-tools: Bash(bash ~/.claude/debate-scripts/acpx-env-snapshot.sh:*), Bash(which npx:*), Bash(acpx:*), Bash(npx acpx@latest:*), Bash(gemini:*), Bash(bash ~/.claude/debate-scripts/debate-setup.sh:*), Bash(bash ~/.claude/debate-scripts/create-litellm-agent.sh:*), Bash(ls:*), Bash(chmod:*), Bash(mkdir:*), Write(~/.claude/debate-acpx.json), Write(~/.acpx/*), Write(~/.opencode.json)
 ---
 
 # debate — acpx Setup Check
@@ -8,7 +8,7 @@ allowed-tools: Bash(which acpx:*), Bash(which npx:*), Bash(which jq:*), Bash(whi
 Verify acpx prerequisites and print everything needed for `/debate:all`.
 
 **Environment snapshot:**
-!`{ echo "acpx: $(which acpx 2>/dev/null && acpx --version 2>/dev/null || echo 'not found')"; echo "jq: $(which jq 2>/dev/null && jq --version 2>/dev/null || echo 'not found')"; echo "opencode: $(which opencode 2>/dev/null && opencode --version 2>/dev/null || echo 'not found')"; echo "debate-scripts: $(ls ~/.claude/debate-scripts/invoke-acpx.sh 2>/dev/null && echo 'symlinked' || echo 'not found')"; echo "---"; echo "debate-acpx.json:"; cat ~/.claude/debate-acpx.json 2>/dev/null || echo 'not found'; }`
+!`bash ~/.claude/debate-scripts/acpx-env-snapshot.sh`
 
 ---
 
@@ -222,46 +222,64 @@ For system prompts, suggest unique review personas for each reviewer. Examples:
 
 ## Step 3: Probe each agent
 
-For each configured reviewer, ensure a session exists and run a quick test:
+For each configured reviewer:
 
-```bash
-$ACPX_CMD <agent> sessions ensure 2>&1
-echo "Reply with only the word PONG." | $ACPX_CMD --format quiet --approve-reads <agent>
-```
+- **Non-gemini agents:** ensure a session exists and run a quick test via acpx:
+  ```bash
+  $ACPX_CMD <agent> sessions ensure 2>&1
+  echo "Reply with only the word PONG." | $ACPX_CMD --format quiet --approve-reads <agent>
+  ```
+- **gemini agent:** probe using direct CLI (see below — ACP mode is broken):
+  ```bash
+  echo "Reply with only the word PONG." | timeout 5 gemini -s -e ""
+  ```
 
 Report:
 - Response contains "PONG" → `✅ <name>: <agent> responds`
 - Session creation fails or probe times out → `❌ <name>: <agent> failed`
 
-### Gemini agent — non-interactive auth
+### Gemini agent — direct CLI invocation
 
-The `gemini` agent requires an API key for non-interactive use (acpx runs it as a subprocess, which cannot complete interactive OAuth). The Gemini CLI's stored OAuth credentials do **not** transfer to non-interactive subprocesses.
+The `gemini` agent uses the Gemini CLI directly (not via acpx ACP mode). Gemini CLI's ACP mode hangs indefinitely at the initialize handshake and is not usable. Direct CLI invocation works with both OAuth and API key auth.
 
-If the gemini probe fails with a message like "No GEMINI_API_KEY" or "waiting on interactive OAuth":
+**Probe command for gemini:**
+```bash
+echo "Reply with only the word PONG." | timeout 5 gemini -s -e ""
+```
+(Use `gtimeout` if `timeout` is not available on macOS.)
+
+- Response contains "PONG" → `✅ gemini: CLI responds`
+- Command not found → `❌ gemini: CLI not installed — npm install -g @google/gemini-cli`
+- Auth error → see below
+
+**If auth fails:**
+
+Common auth errors come from wrong `selectedType` in `~/.gemini/settings.json`. Valid values:
+- `"oauth-personal"` — browser OAuth (default, works for direct CLI)
+- `"gemini-api-key"` — uses `GEMINI_API_KEY` env var (required if no browser access)
+- `"vertex-ai"` — Google Cloud Vertex AI
+
+`"api-key"` is NOT valid and causes "Invalid auth method selected".
+
+If the user needs API key auth (e.g., headless environment):
 
 ```text
-  ❌ gemini: needs API key for non-interactive use (interactive OAuth not supported in subprocess mode)
-
-  Fix: get a free Gemini API key and add it to your environment:
+  Fix: get a free Gemini API key:
 
   1. Visit: https://aistudio.google.com/apikey
   2. Click "Create API key" → copy the key (starts with "AIza...")
-  3. Add to ~/.claude/settings.json:
-     {
-       "env": {
-         "GEMINI_API_KEY": "AIza..."
-       }
-     }
-  4. Restart Claude Code, then re-run /debate:acpx-setup to verify.
-
-  The free tier is sufficient — Gemini 2.0/2.5 Flash models are included.
-  Note: gemini CLI direct usage continues to work with OAuth — this only affects /debate:all.
+  3. Set auth type in ~/.gemini/settings.json:
+       { "selectedType": "gemini-api-key" }
+  4. Add to ~/.claude/settings.json:
+       { "env": { "GEMINI_API_KEY": "AIza..." } }
+  5. Restart Claude Code, then re-run /debate:acpx-setup to verify.
 ```
 
 Ask the user if they want to set up the API key now. If yes:
 1. Ask them to paste the key
 2. Read `~/.claude/settings.json`, add or merge `"env": { "GEMINI_API_KEY": "<key>" }`, write back
-3. Inform them to restart Claude Code for the env var to take effect
+3. Read `~/.gemini/settings.json`, set `"selectedType": "gemini-api-key"`, write back
+4. Inform them to restart Claude Code for the env var to take effect
 
 ### Other agent failure modes
 

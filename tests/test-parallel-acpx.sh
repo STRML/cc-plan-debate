@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PARALLEL="$PROJECT_DIR/scripts/run-parallel-acpx.sh"
 MOCK="$SCRIPT_DIR/mock-acpx.sh"
+MOCK_GEMINI="$SCRIPT_DIR/mock-gemini.sh"
 
 PASS=0
 FAIL=0
@@ -284,10 +285,12 @@ echo ""
 echo "=== run-parallel-acpx.sh tests ==="
 echo ""
 
-# Rename mock to 'acpx' so PATH lookup finds it
+# Create mock binaries on PATH for acpx and gemini (direct CLI path)
 ln -sf "$MOCK" "$SCRIPT_DIR/acpx"
 chmod +x "$SCRIPT_DIR/acpx"
-trap 'rm -f "$SCRIPT_DIR/acpx"' EXIT
+ln -sf "$MOCK_GEMINI" "$SCRIPT_DIR/gemini"
+chmod +x "$SCRIPT_DIR/gemini"
+trap 'rm -f "$SCRIPT_DIR/acpx" "$SCRIPT_DIR/gemini"' EXIT
 
 run_test "parallel happy path" test_parallel_happy_path
 run_test "subset reviewers" test_subset_reviewers

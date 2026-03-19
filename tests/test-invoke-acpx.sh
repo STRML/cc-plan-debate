@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 INVOKE="$PROJECT_DIR/scripts/invoke-acpx.sh"
 MOCK="$SCRIPT_DIR/mock-acpx.sh"
+MOCK_GEMINI="$SCRIPT_DIR/mock-gemini.sh"
 
 PASS=0
 FAIL=0
@@ -422,16 +423,70 @@ test_stderr_surfaced_on_failure() {
   rm -rf "$work_dir"
 }
 
+test_gemini_uses_direct_cli() {
+  # When agent is "gemini", invoke-acpx.sh should use the gemini CLI directly
+  # (not acpx) because Gemini's ACP mode is non-functional.
+  local work_dir config acpx_log gemini_log
+  work_dir=$(setup_work_dir)
+  config=$(setup_config "$work_dir")
+  acpx_log="$work_dir/acpx-log.txt"
+  gemini_log="$work_dir/gemini-log.txt"
+
+  SKIP_SESSION_CHECK=1 \
+  PATH="$SCRIPT_DIR:$PATH" \
+  MOCK_ACPX_LOG="$acpx_log" \
+  MOCK_GEMINI_LOG="$gemini_log" \
+    bash "$INVOKE" "$config" "$work_dir" "no-prompt" 2>/dev/null
+
+  # Should succeed
+  [ "$(cat "$work_dir/no-prompt-exit.txt")" = "0" ] || return 1
+
+  # Output should be from the gemini mock (default: "Mock gemini review. VERDICT: APPROVED")
+  grep -q "Mock gemini review" "$work_dir/no-prompt-output.md" || return 1
+
+  # gemini mock was called
+  [ -f "$gemini_log" ] || return 1
+  grep -q "gemini" "$gemini_log" || return 1
+
+  # acpx should NOT have been called for this reviewer
+  ! grep -q "no-prompt" "$acpx_log" 2>/dev/null || return 1
+
+  rm -rf "$work_dir"
+}
+
+test_gemini_skips_session_ensure() {
+  # sessions ensure should NOT be called for the gemini agent
+  local work_dir config log_file
+  work_dir=$(setup_work_dir)
+  config=$(setup_config "$work_dir")
+  log_file="$work_dir/invoke-log.txt"
+
+  PATH="$SCRIPT_DIR:$PATH" \
+  MOCK_ACPX_SESSION_ENSURE_EXIT=1 \
+  MOCK_ACPX_LOG="$log_file" \
+    bash "$INVOKE" "$config" "$work_dir" "no-prompt" 2>/dev/null
+
+  # Should succeed (session ensure was not called, so its failure doesn't matter)
+  [ "$(cat "$work_dir/no-prompt-exit.txt")" = "0" ] || return 1
+
+  # sessions ensure should NOT have been called
+  ! grep -q "sessions ensure" "$log_file" 2>/dev/null || return 1
+
+  rm -rf "$work_dir"
+}
+
 # --- Run ---
 
 echo ""
 echo "=== invoke-acpx.sh tests ==="
 echo ""
 
-# Rename mock to 'acpx' so PATH lookup finds it
+# Create mock binaries on PATH for acpx and gemini (direct CLI path)
 ln -sf "$MOCK" "$SCRIPT_DIR/acpx"
 chmod +x "$SCRIPT_DIR/acpx"
-trap 'rm -f "$SCRIPT_DIR/acpx"' EXIT
+ln -sf "$MOCK_GEMINI" "$SCRIPT_DIR/gemini"
+chmod +x "$SCRIPT_DIR/gemini"
+trap 'rm -f "$SCRIPT_DIR/acpx" "$SCRIPT_DIR/gemini"' EXIT
 
 run_test "happy path" test_happy_path
 run_test "debate prompt file" test_prompt_file_used_for_debate
@@ -450,6 +505,8 @@ run_test "session creation fails exits 4" test_session_creation_fails_exits_4
 run_test "session exists no extra calls" test_session_exists_no_extra_calls
 run_test "skip session check env" test_skip_session_check_env
 run_test "stderr surfaced on failure" test_stderr_surfaced_on_failure
+run_test "gemini uses direct CLI" test_gemini_uses_direct_cli
+run_test "gemini skips session ensure" test_gemini_skips_session_ensure
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ($(( PASS + FAIL )) total) ==="

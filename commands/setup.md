@@ -45,32 +45,20 @@ Report:
 - Found → `✅ jq: found at /path/to/jq`
 - Missing → `❌ jq: not found — install: brew install jq (macOS) / apt install jq (Linux)`
 
-## Step 3: Check agent auth
+## Step 3: Check gemini CLI (if configured)
 
-Check whether `GEMINI_API_KEY` is set — required for the `gemini` acpx agent (interactive OAuth doesn't work in non-interactive subprocess mode):
+If `gemini` is not in the user's `~/.claude/debate-acpx.json` config, skip this step silently.
 
+Check whether the `gemini` CLI is installed and responding:
 ```bash
-echo "${GEMINI_API_KEY:+set}" 2>/dev/null
+which gemini 2>/dev/null || echo "not found"
 ```
 
 Report:
-- Output is `set` → `✅ GEMINI_API_KEY: set (gemini agent enabled for acpx)`
-- Empty → `⚠️  GEMINI_API_KEY not set — gemini agent will fail in acpx`
+- Found → `✅ gemini CLI: found at /path/to/gemini`
+- Not found → `❌ gemini CLI: not found — install: npm install -g @google/gemini-cli`
 
-If not set and the user has `gemini` configured as a reviewer:
-```text
-  ⚠️  GEMINI_API_KEY is not set.
-  The gemini acpx agent requires an API key (interactive OAuth is not supported in subprocess mode).
-
-  Get a free key: https://aistudio.google.com/apikey
-  Then add to ~/.claude/settings.json:
-    "env": { "GEMINI_API_KEY": "AIza..." }
-
-  Note: gemini CLI direct usage continues to work — this only affects /debate:all.
-  Alternatively, use gemini via OpenRouter: /debate:acpx-setup → pick OpenRouter model.
-```
-
-If `gemini` is not in the user's `~/.claude/debate-acpx.json` config, skip this step silently.
+Note: `/debate:all` invokes `gemini` directly (not via acpx) — Gemini CLI's ACP mode is non-functional. OAuth (default auth) works fine for direct CLI invocation. An API key is only required if running in a headless environment without browser access.
 
 ## Step 4: Detect v1.x installation and migrate
 

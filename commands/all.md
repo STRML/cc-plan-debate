@@ -287,7 +287,7 @@ rm -rf <WORK_DIR>
 
 ## Rules
 
-- **acpx handles everything.** No provider CLIs needed. No API keys to manage. Each agent's auth is configured in acpx.
+- **acpx handles everything** — except `gemini`. Gemini CLI's ACP mode is broken (hangs at initialize). `invoke-acpx.sh` detects `agent: gemini` and falls back to direct CLI invocation (`gemini -s -e ""`), which works with both OAuth and API key auth.
 - **Parallel via bash.** `run-parallel-acpx.sh` runs reviewers as nohup/disown background processes from the main agent's context. No subagents needed — no permission inheritance issues.
 - **Debate via direct invoke.** Debate rounds call `invoke-acpx.sh` directly from the main agent (not subagents). Prompt files are picked up automatically.
 - **No session resume needed.** acpx manages sessions internally. Each round injects full context via prompt files.

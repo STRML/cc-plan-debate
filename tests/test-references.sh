@@ -127,7 +127,9 @@ test_new_files_exist() {
   for f in \
     scripts/invoke-acpx.sh \
     scripts/run-parallel-acpx.sh \
+    scripts/acpx-env-snapshot.sh \
     commands/acpx-setup.md \
+    tests/mock-gemini.sh \
     MIGRATING.md; do
     if [ ! -f "$PROJECT_DIR/$f" ]; then
       echo "  Missing: $f"
@@ -139,7 +141,7 @@ test_new_files_exist() {
 
 test_new_scripts_executable() {
   local bad=0
-  for f in scripts/invoke-acpx.sh scripts/run-parallel-acpx.sh; do
+  for f in scripts/invoke-acpx.sh scripts/run-parallel-acpx.sh scripts/acpx-env-snapshot.sh tests/mock-gemini.sh; do
     if [ ! -x "$PROJECT_DIR/$f" ]; then
       echo "  Not executable: $f"
       bad=1

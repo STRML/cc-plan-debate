@@ -119,17 +119,21 @@ fi
 # Skip if SKIP_SESSION_CHECK is set (for testing with mock acpx)
 
 if [ -z "${SKIP_SESSION_CHECK:-}" ]; then
-  echo "[$REVIEWER] Ensuring acpx session for '$AGENT'..." >&2
-  if ! "${ACPX_BIN[@]}" "$AGENT" sessions ensure > /dev/null 2>&1; then
-    echo "[$REVIEWER] Failed to ensure acpx session for '$AGENT'." >&2
-    echo "  Check that the agent CLI is installed and authenticated." >&2
-    echo "  Run /debate:acpx-setup to diagnose." >&2
-    echo "4" > "$WORK_DIR/${REVIEWER}-exit.txt"
-    echo "Failed to ensure acpx session for '$AGENT'. Run /debate:acpx-setup to diagnose." > "$WORK_DIR/${REVIEWER}-output.md"
-    trap - EXIT
-    exit 4
+  # Gemini uses direct CLI invocation — ACP mode is broken (hangs at initialize handshake).
+  # Direct CLI works with both OAuth and API key. Skip session check.
+  if [ "$AGENT" != "gemini" ]; then
+    echo "[$REVIEWER] Ensuring acpx session for '$AGENT'..." >&2
+    if ! "${ACPX_BIN[@]}" "$AGENT" sessions ensure > /dev/null 2>&1; then
+      echo "[$REVIEWER] Failed to ensure acpx session for '$AGENT'." >&2
+      echo "  Check that the agent CLI is installed and authenticated." >&2
+      echo "  Run /debate:acpx-setup to diagnose." >&2
+      echo "4" > "$WORK_DIR/${REVIEWER}-exit.txt"
+      echo "Failed to ensure acpx session for '$AGENT'. Run /debate:acpx-setup to diagnose." > "$WORK_DIR/${REVIEWER}-output.md"
+      trap - EXIT
+      exit 4
+    fi
+    echo "[$REVIEWER] Session ready." >&2
   fi
-  echo "[$REVIEWER] Session ready." >&2
 fi
 
 TIMEOUT="${TIMEOUT_ARG:-${CONFIG_TIMEOUT:-120}}"
@@ -176,6 +180,79 @@ else
   echo "  Install: brew install coreutils (macOS) / apt install coreutils (Linux)" >&2
 fi
 
+# --- Shared result handler ---
+# Call after running any reviewer command. Uses globals: REVIEWER, WORK_DIR, TIMEOUT, EXIT_CODE.
+# $1: label used in log/error messages (e.g. "gemini CLI" or "acpx")
+
+handle_invocation_result() {
+  local label="$1"
+  if [ "$EXIT_CODE" -eq 124 ]; then
+    echo "[$REVIEWER] Timed out after ${TIMEOUT}s." >&2
+  elif [ "$EXIT_CODE" -ne 0 ]; then
+    echo "[$REVIEWER] $label failed (exit $EXIT_CODE)." >&2
+    if [ -s "$WORK_DIR/${REVIEWER}-stderr.log" ]; then
+      echo "[$REVIEWER] stderr: $(head -5 "$WORK_DIR/${REVIEWER}-stderr.log")" >&2
+    fi
+    if [ ! -s "$WORK_DIR/${REVIEWER}-output.md" ]; then
+      {
+        echo "$label error (exit $EXIT_CODE):"
+        echo ""
+        cat "$WORK_DIR/${REVIEWER}-stderr.log" 2>/dev/null || echo "(no stderr)"
+      } > "$WORK_DIR/${REVIEWER}-output.md"
+    fi
+  else
+    echo "[$REVIEWER] Review received." >&2
+  fi
+
+  echo "$EXIT_CODE" > "$WORK_DIR/${REVIEWER}-exit.txt"
+
+  if [ "$EXIT_CODE" -eq 0 ] && [ ! -s "$WORK_DIR/${REVIEWER}-output.md" ]; then
+    echo "[$REVIEWER] Empty response from $label." >&2
+    {
+      echo "Empty response from $label. Stderr:"
+      echo ""
+      cat "$WORK_DIR/${REVIEWER}-stderr.log" 2>/dev/null || echo "(no stderr)"
+    } > "$WORK_DIR/${REVIEWER}-output.md"
+    echo "1" > "$WORK_DIR/${REVIEWER}-exit.txt"
+    trap - EXIT
+    exit 1
+  fi
+
+  trap - EXIT
+  exit "$EXIT_CODE"
+}
+
+# --- Gemini: direct CLI invocation ---
+# Gemini CLI's ACP mode (--acp / --experimental-acp) never completes the ACP initialize
+# handshake regardless of auth method. Use the gemini CLI directly via stdin instead.
+# Works with both OAuth (default) and API key auth.
+
+if [ "$AGENT" = "gemini" ]; then
+  if ! command -v gemini > /dev/null 2>&1; then
+    echo "[$REVIEWER] gemini CLI not found. Install: npm install -g @google/gemini-cli" >&2
+    echo "gemini CLI not installed. Run: npm install -g @google/gemini-cli" > "$WORK_DIR/${REVIEWER}-output.md"
+    echo "1" > "$WORK_DIR/${REVIEWER}-exit.txt"
+    trap - EXIT
+    exit 1
+  fi
+
+  echo "[$REVIEWER] Submitting plan to gemini CLI directly (timeout: ${TIMEOUT}s)..." >&2
+
+  GEMINI_CMD=()
+  if [ -n "$TIMEOUT_BIN" ] && [ "$TIMEOUT" -gt 0 ]; then
+    GEMINI_CMD+=("$TIMEOUT_BIN" "$TIMEOUT")
+  fi
+  # -s: sandbox  -e "": disable extensions (faster startup)
+  GEMINI_CMD+=(gemini -s -e "")
+
+  set +e
+  "${GEMINI_CMD[@]}" < "$PROMPT_FILE" > "$WORK_DIR/${REVIEWER}-output.md" 2>"$WORK_DIR/${REVIEWER}-stderr.log"
+  EXIT_CODE=$?
+  set -e
+
+  handle_invocation_result "gemini CLI"
+fi
+
 # --- acpx call ---
 
 echo "[$REVIEWER] Submitting plan to $AGENT via acpx (timeout: ${TIMEOUT}s)..." >&2
@@ -191,42 +268,4 @@ set +e
 EXIT_CODE=$?
 set -e
 
-# --- Handle exit codes ---
-
-if [ "$EXIT_CODE" -eq 124 ]; then
-  echo "[$REVIEWER] Timed out after ${TIMEOUT}s." >&2
-elif [ "$EXIT_CODE" -ne 0 ]; then
-  echo "[$REVIEWER] acpx failed (exit $EXIT_CODE)." >&2
-  # Surface stderr for diagnostics
-  if [ -s "$WORK_DIR/${REVIEWER}-stderr.log" ]; then
-    echo "[$REVIEWER] stderr: $(head -5 "$WORK_DIR/${REVIEWER}-stderr.log")" >&2
-  fi
-  # If output is empty, populate from stderr
-  if [ ! -s "$WORK_DIR/${REVIEWER}-output.md" ]; then
-    {
-      echo "acpx error (exit $EXIT_CODE) for agent '$AGENT':"
-      echo ""
-      cat "$WORK_DIR/${REVIEWER}-stderr.log" 2>/dev/null || echo "(no stderr)"
-    } > "$WORK_DIR/${REVIEWER}-output.md"
-  fi
-else
-  echo "[$REVIEWER] Review received." >&2
-fi
-
-echo "$EXIT_CODE" > "$WORK_DIR/${REVIEWER}-exit.txt"
-
-# Check for empty successful response
-if [ "$EXIT_CODE" -eq 0 ] && [ ! -s "$WORK_DIR/${REVIEWER}-output.md" ]; then
-  echo "[$REVIEWER] Empty response from acpx." >&2
-  {
-    echo "Empty response from $AGENT via acpx. Stderr:"
-    echo ""
-    cat "$WORK_DIR/${REVIEWER}-stderr.log" 2>/dev/null || echo "(no stderr)"
-  } > "$WORK_DIR/${REVIEWER}-output.md"
-  echo "1" > "$WORK_DIR/${REVIEWER}-exit.txt"
-  trap - EXIT
-  exit 1
-fi
-
-trap - EXIT
-exit "$EXIT_CODE"
+handle_invocation_result "acpx"

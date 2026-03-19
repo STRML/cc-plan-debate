@@ -14,9 +14,7 @@ Verify acpx prerequisites and print everything needed for `/debate:all`.
 
 ## Step 1: Check tools and set ACPX_CMD
 
-The environment snapshot above shows what's installed. Use it to determine tool availability rather than running the checks again.
-
-Determine the acpx invocation command:
+Determine the acpx invocation command from the snapshot above:
 - If `acpx` is found: set `ACPX_CMD=acpx`
 - If `acpx` is not found but `npx` is: set `ACPX_CMD="npx acpx@latest"`
 - If neither: stop with error
@@ -48,9 +46,7 @@ Both `acpx` (or `npx`) and `jq` are required. Use `ACPX_CMD` for all subsequent 
 
 ## Step 2: Check config file
 
-The config is already loaded in the environment snapshot above.
-
-### If config exists
+### If config exists (loaded above)
 
 Show the parsed config:
 ```text
@@ -224,10 +220,10 @@ For system prompts, suggest unique review personas for each reviewer. Examples:
 
 ## Step 3: Probe each agent
 
-For each configured reviewer, create a session and run a quick test:
+For each configured reviewer, ensure a session exists and run a quick test:
 
 ```bash
-$ACPX_CMD <agent> sessions new 2>&1
+$ACPX_CMD <agent> sessions ensure 2>&1
 echo "Reply with only the word PONG." | $ACPX_CMD --format quiet --approve-reads <agent>
 ```
 
@@ -269,15 +265,11 @@ Ask the user if they want to set up the API key now. If yes:
 
 For OpenRouter agents (custom opencode-based agents): a common failure is wrong model ID. Suggest verifying the model ID at openrouter.ai/models.
 
-For custom agents with no acpx session: try `$ACPX_CMD <agent> sessions new` first.
+For custom agents with no acpx session: try `$ACPX_CMD <agent> sessions ensure` first.
 
 ## Step 4: Check debate-scripts symlink
 
-The symlink status is in the environment snapshot above (`debate-scripts: symlinked` or `not found`).
-
-Report:
-- `symlinked` → `✅ invoke-acpx.sh accessible via debate-scripts symlink`
-- `not found` → `❌ Run /debate:setup first to refresh the symlink`
+From the snapshot: `debate-scripts: symlinked` → ✅ ready; `not found` → ❌ run `/debate:setup`.
 
 ## Step 5: Print permission allowlist
 
@@ -305,7 +297,7 @@ To run /debate:all without approval prompts, add to ~/.claude/settings.json:
 
 ## Step 6: Print summary
 
-For each reviewer, read `~/.claude/debate-acpx.json`. For built-in agents show `built-in`; for OpenRouter agents show `openrouter` and append ` — openrouter/<model_id>`; for LiteLLM agents show `litellm` and append ` — <model_id>` if present.
+For each reviewer from the config loaded above — built-in agents show `built-in`; OpenRouter agents show `openrouter — openrouter/<model_id>`; LiteLLM agents show `litellm — <model_id>`.
 
 ```text
 ### Summary

@@ -104,6 +104,15 @@ fi
 CONFIG_TIMEOUT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].timeout // empty' "$CONFIG_FILE")
 CONFIG_SYSTEM_PROMPT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].system_prompt // empty' "$CONFIG_FILE")
 
+# --- Nested Claude guard ---
+# When the agent is `claude`, Claude Code's nested-session guard (CLAUDECODE=1)
+# blocks acpx from spawning it as an ACP subprocess. Unset the guard vars so the
+# child process can start. This was required in v1.x and remains necessary in v2.
+
+if [ "$AGENT" = "claude" ]; then
+  unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
+fi
+
 # --- Session setup: ensure a session exists for this agent ---
 # `sessions ensure` is idempotent: creates a session if none exists for the
 # current cwd, reuses one if it does. Avoids accumulating sessions on every run.

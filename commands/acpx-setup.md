@@ -80,8 +80,8 @@ Built-in acpx agents (need the agent CLI installed):
   qwen     — Qwen Code
   opencode — OpenCode            (npm install -g opencode-ai)
 
-  ⛔ claude — NOT supported via acpx (internal error). Use /debate:opus-review for
-             Claude-as-reviewer instead — it talks to Claude directly via team mode.
+  claude   — Claude Code         (already installed) ⚠️  requires CLAUDECODE to be
+             unset — invoke-acpx.sh handles this automatically
 
 OpenRouter models via opencode (need opencode + OpenRouter API key):
   Any model on OpenRouter — DeepSeek, Mercury, Kimi, Mixtral, GPT, etc.

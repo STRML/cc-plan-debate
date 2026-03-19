@@ -92,7 +92,7 @@ These have native Agent Client Protocol support. Install the CLI, and acpx handl
 |-----------|-------|---------|
 | `codex` | OpenAI Codex | `npm install -g @openai/codex` + `OPENAI_API_KEY` |
 | `gemini` | Google Gemini 2.x/3.x | `npm install -g @google/gemini-cli` + `gemini auth` + `GEMINI_API_KEY` ¹ |
-| ~~`claude`~~ | ~~Claude Code~~ | ⛔ Not supported via acpx (internal error). Use `/debate:opus-review` for Claude-as-reviewer. |
+| `claude` | Claude (Opus/Sonnet) | Already installed — you're running it now |
 | `kimi` | Kimi (Moonshot AI) | See [Kimi CLI docs](https://github.com/moonshot-ai/kimi-cli) |
 | `kiro` | Kiro (AWS) | See [Kiro docs](https://kiro.dev) |
 | `qwen` | Qwen Code | See [Qwen Code docs](https://github.com/QwenLM/qwen-code) |
@@ -110,7 +110,7 @@ These have native Agent Client Protocol support. Install the CLI, and acpx handl
 > "env": { "GEMINI_API_KEY": "AIza..." }
 > ```
 
-> **Claude note:** The `claude` acpx agent is not supported — it fails with an internal error. Use `/debate:opus-review` to get a Claude review; it talks to Opus directly via team mode rather than routing through acpx.
+> **Claude note:** Using `claude` as a reviewer means Claude reviewing its own plan — useful for a fresh-context skeptical read, but not truly independent. For independent perspectives, use non-Claude agents. `invoke-acpx.sh` automatically handles the nested-session guard (`CLAUDECODE`) required to run Claude as a subprocess.
 
 ### Any model via OpenRouter (using opencode)
 

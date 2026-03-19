@@ -11,13 +11,16 @@ Arguments:
 - First arg: optional comma-separated reviewer names (e.g. `codex,gemini`). Defaults to all from config.
 - `skip-debate` — skip the targeted debate phase, go straight to final report.
 
+**Reviewer config** (`~/.claude/debate-acpx.json`):
+!`cat ~/.claude/debate-acpx.json 2>/dev/null || echo '{"error":"Config not found — run /debate:acpx-setup first."}'`
+
 ---
 
 ## Step 1: Prerequisites & Setup
 
 ### 1a. Validate config
 
-Read `~/.claude/debate-acpx.json`. If missing, stop:
+The config is already loaded above. If it contains `"error"`, stop:
 ```text
 Config not found: ~/.claude/debate-acpx.json
 Run /debate:acpx-setup to create it.

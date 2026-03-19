@@ -7,15 +7,14 @@ allowed-tools: Bash(which acpx:*), Bash(which npx:*), Bash(which jq:*), Bash(whi
 
 Verify acpx prerequisites and print everything needed for `/debate:all`.
 
+**Environment snapshot:**
+!`{ echo "acpx: $(which acpx 2>/dev/null && acpx --version 2>/dev/null || echo 'not found')"; echo "jq: $(which jq 2>/dev/null && jq --version 2>/dev/null || echo 'not found')"; echo "opencode: $(which opencode 2>/dev/null && opencode --version 2>/dev/null || echo 'not found')"; echo "debate-scripts: $(ls ~/.claude/debate-scripts/invoke-acpx.sh 2>/dev/null && echo 'symlinked' || echo 'not found')"; echo "---"; echo "debate-acpx.json:"; cat ~/.claude/debate-acpx.json 2>/dev/null || echo 'not found'; }`
+
 ---
 
 ## Step 1: Check tools and set ACPX_CMD
 
-```bash
-which acpx || which npx
-which jq
-which opencode
-```
+The environment snapshot above shows what's installed. Use it to determine tool availability rather than running the checks again.
 
 Determine the acpx invocation command:
 - If `acpx` is found: set `ACPX_CMD=acpx`
@@ -49,7 +48,7 @@ Both `acpx` (or `npx`) and `jq` are required. Use `ACPX_CMD` for all subsequent 
 
 ## Step 2: Check config file
 
-Read `~/.claude/debate-acpx.json`.
+The config is already loaded in the environment snapshot above.
 
 ### If config exists
 
@@ -274,13 +273,11 @@ For custom agents with no acpx session: try `$ACPX_CMD <agent> sessions new` fir
 
 ## Step 4: Check debate-scripts symlink
 
-```bash
-ls -la ~/.claude/debate-scripts/invoke-acpx.sh
-```
+The symlink status is in the environment snapshot above (`debate-scripts: symlinked` or `not found`).
 
 Report:
-- Found → `✅ invoke-acpx.sh accessible via debate-scripts symlink`
-- Not found → `❌ Run /debate:setup first to refresh the symlink`
+- `symlinked` → `✅ invoke-acpx.sh accessible via debate-scripts symlink`
+- `not found` → `❌ Run /debate:setup first to refresh the symlink`
 
 ## Step 5: Print permission allowlist
 

@@ -82,6 +82,8 @@ Built-in acpx agents (need the agent CLI installed):
 
   claude   — Claude Code         (already installed) ⚠️  requires CLAUDECODE to be
              unset — invoke-acpx.sh handles this automatically
+  opus     — Claude Opus 4.6    (already installed) direct CLI invocation, bypasses
+             acpx entirely — runs `claude --print --model claude-opus-4-6` via stdin
 
 OpenRouter models via opencode (need opencode + OpenRouter API key):
   Any model on OpenRouter — DeepSeek, Mercury, Kimi, Mixtral, GPT, etc.
@@ -224,7 +226,7 @@ For system prompts, suggest unique review personas for each reviewer. Examples:
 
 For each configured reviewer:
 
-- **Non-gemini agents:** ensure a session exists and run a quick test via acpx:
+- **Non-gemini, non-opus agents:** ensure a session exists and run a quick test via acpx:
   ```bash
   $ACPX_CMD <agent> sessions ensure 2>&1
   echo "Reply with only the word PONG." | $ACPX_CMD --format quiet --approve-reads <agent>
@@ -232,6 +234,10 @@ For each configured reviewer:
 - **gemini agent:** probe using direct CLI (see below — ACP mode is broken):
   ```bash
   echo "Reply with only the word PONG." | timeout 5 gemini -s -e ""
+  ```
+- **opus agent:** probe using direct Claude CLI:
+  ```bash
+  echo "Reply with only the word PONG." | timeout 30 claude --print --model claude-opus-4-6
   ```
 
 Report:

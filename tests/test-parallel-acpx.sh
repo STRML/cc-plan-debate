@@ -9,6 +9,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PARALLEL="$PROJECT_DIR/scripts/run-parallel-acpx.sh"
 MOCK="$SCRIPT_DIR/mock-acpx.sh"
 MOCK_GEMINI="$SCRIPT_DIR/mock-gemini.sh"
+MOCK_CLAUDE="$SCRIPT_DIR/mock-claude.sh"
 
 PASS=0
 FAIL=0
@@ -24,7 +25,8 @@ setup_env() {
 {
   "reviewers": {
     "alpha": { "agent": "codex", "timeout": 10 },
-    "beta": { "agent": "gemini", "timeout": 10 }
+    "beta": { "agent": "gemini", "timeout": 10 },
+    "gamma": { "agent": "opus", "timeout": 10 }
   }
 }
 EOF
@@ -64,15 +66,18 @@ test_parallel_happy_path() {
 
   local exit_code=$?
 
-  # Both reviewers should have output
+  # All reviewers should have output
   [ -f "$work_dir/alpha-exit.txt" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
   [ -f "$work_dir/beta-exit.txt" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
+  [ -f "$work_dir/gamma-exit.txt" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
   [ -f "$work_dir/alpha-output.md" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
   [ -f "$work_dir/beta-output.md" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
+  [ -f "$work_dir/gamma-output.md" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
 
-  # Both should succeed
+  # All should succeed
   [ "$(cat "$work_dir/alpha-exit.txt")" = "0" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
   [ "$(cat "$work_dir/beta-exit.txt")" = "0" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
+  [ "$(cat "$work_dir/gamma-exit.txt")" = "0" ] || { rm -rf "$work_dir" "$tmp_dir"; return 1; }
 
   rm -rf "$work_dir" "$tmp_dir"
 }
@@ -285,12 +290,14 @@ echo ""
 echo "=== run-parallel-acpx.sh tests ==="
 echo ""
 
-# Create mock binaries on PATH for acpx and gemini (direct CLI path)
+# Create mock binaries on PATH for acpx, gemini, and claude (direct CLI paths)
 ln -sf "$MOCK" "$SCRIPT_DIR/acpx"
 chmod +x "$SCRIPT_DIR/acpx"
 ln -sf "$MOCK_GEMINI" "$SCRIPT_DIR/gemini"
 chmod +x "$SCRIPT_DIR/gemini"
-trap 'rm -f "$SCRIPT_DIR/acpx" "$SCRIPT_DIR/gemini"' EXIT
+ln -sf "$MOCK_CLAUDE" "$SCRIPT_DIR/claude"
+chmod +x "$SCRIPT_DIR/claude"
+trap 'rm -f "$SCRIPT_DIR/acpx" "$SCRIPT_DIR/gemini" "$SCRIPT_DIR/claude"' EXIT
 
 run_test "parallel happy path" test_parallel_happy_path
 run_test "subset reviewers" test_subset_reviewers

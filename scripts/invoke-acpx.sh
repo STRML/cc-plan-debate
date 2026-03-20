@@ -109,7 +109,7 @@ CONFIG_SYSTEM_PROMPT=$(jq -r --arg rev "$REVIEWER" '.reviewers[$rev].system_prom
 # blocks acpx from spawning it as an ACP subprocess. Unset the guard vars so the
 # child process can start. This was required in v1.x and remains necessary in v2.
 
-if [ "$AGENT" = "claude" ]; then
+if [ "$AGENT" = "claude" ] || [ "$AGENT" = "opus" ]; then
   unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 fi
 
@@ -119,9 +119,8 @@ fi
 # Skip if SKIP_SESSION_CHECK is set (for testing with mock acpx)
 
 if [ -z "${SKIP_SESSION_CHECK:-}" ]; then
-  # Gemini uses direct CLI invocation — ACP mode is broken (hangs at initialize handshake).
-  # Direct CLI works with both OAuth and API key. Skip session check.
-  if [ "$AGENT" != "gemini" ]; then
+  # Gemini and Opus use direct CLI invocation — skip acpx session check.
+  if [ "$AGENT" != "gemini" ] && [ "$AGENT" != "opus" ]; then
     echo "[$REVIEWER] Ensuring acpx session for '$AGENT'..." >&2
     if ! "${ACPX_BIN[@]}" "$AGENT" sessions ensure > /dev/null 2>&1; then
       echo "[$REVIEWER] Failed to ensure acpx session for '$AGENT'." >&2
@@ -251,6 +250,35 @@ if [ "$AGENT" = "gemini" ]; then
   set -e
 
   handle_invocation_result "gemini CLI"
+fi
+
+# --- Opus: direct Claude CLI invocation ---
+# Uses `claude --print --model claude-opus-4-6` via stdin — bypasses acpx entirely.
+# CLAUDECODE is already unset above so the nested-session guard doesn't block it.
+
+if [ "$AGENT" = "opus" ]; then
+  if ! command -v claude > /dev/null 2>&1; then
+    echo "[$REVIEWER] claude CLI not found — is Claude Code installed?" >&2
+    echo "claude CLI not installed. Ensure Claude Code is on PATH." > "$WORK_DIR/${REVIEWER}-output.md"
+    echo "1" > "$WORK_DIR/${REVIEWER}-exit.txt"
+    trap - EXIT
+    exit 1
+  fi
+
+  echo "[$REVIEWER] Submitting plan to Claude Opus directly (timeout: ${TIMEOUT}s)..." >&2
+
+  OPUS_CMD=()
+  if [ -n "$TIMEOUT_BIN" ] && [ "$TIMEOUT" -gt 0 ]; then
+    OPUS_CMD+=("$TIMEOUT_BIN" "$TIMEOUT")
+  fi
+  OPUS_CMD+=(claude --print --model claude-opus-4-6)
+
+  set +e
+  "${OPUS_CMD[@]}" < "$PROMPT_FILE" > "$WORK_DIR/${REVIEWER}-output.md" 2>"$WORK_DIR/${REVIEWER}-stderr.log"
+  EXIT_CODE=$?
+  set -e
+
+  handle_invocation_result "Claude Opus"
 fi
 
 # --- acpx call ---

@@ -9,6 +9,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 INVOKE="$PROJECT_DIR/scripts/invoke-acpx.sh"
 MOCK="$SCRIPT_DIR/mock-acpx.sh"
 MOCK_GEMINI="$SCRIPT_DIR/mock-gemini.sh"
+MOCK_CLAUDE="$SCRIPT_DIR/mock-claude.sh"
 
 PASS=0
 FAIL=0
@@ -36,6 +37,11 @@ setup_config() {
     "no-prompt": {
       "agent": "gemini",
       "timeout": 60
+    },
+    "opus-reviewer": {
+      "agent": "opus",
+      "timeout": 60,
+      "system_prompt": "You are The Skeptic."
     }
   }
 }
@@ -475,18 +481,73 @@ test_gemini_skips_session_ensure() {
   rm -rf "$work_dir"
 }
 
+test_opus_uses_direct_cli() {
+  # When agent is "opus", invoke-acpx.sh should use claude --print --model claude-opus-4-6
+  # directly (not via acpx).
+  local work_dir config acpx_log claude_log
+  work_dir=$(setup_work_dir)
+  config=$(setup_config "$work_dir")
+  acpx_log="$work_dir/acpx-log.txt"
+  claude_log="$work_dir/claude-log.txt"
+
+  SKIP_SESSION_CHECK=1 \
+  PATH="$SCRIPT_DIR:$PATH" \
+  MOCK_ACPX_LOG="$acpx_log" \
+  MOCK_CLAUDE_LOG="$claude_log" \
+    bash "$INVOKE" "$config" "$work_dir" "opus-reviewer" 2>/dev/null
+
+  # Should succeed
+  [ "$(cat "$work_dir/opus-reviewer-exit.txt")" = "0" ] || return 1
+
+  # Output should be from claude mock (default: "Mock Claude Opus review. VERDICT: APPROVED")
+  grep -q "Mock Claude Opus review" "$work_dir/opus-reviewer-output.md" || return 1
+
+  # claude mock was called with --print and --model flags
+  [ -f "$claude_log" ] || return 1
+  grep -q "\-\-print" "$claude_log" || return 1
+  grep -q "claude-opus-4-6" "$claude_log" || return 1
+
+  # acpx should NOT have been called for this reviewer
+  ! grep -q "opus-reviewer" "$acpx_log" 2>/dev/null || return 1
+
+  rm -rf "$work_dir"
+}
+
+test_opus_skips_session_ensure() {
+  # sessions ensure should NOT be called for the opus agent
+  local work_dir config log_file
+  work_dir=$(setup_work_dir)
+  config=$(setup_config "$work_dir")
+  log_file="$work_dir/invoke-log.txt"
+
+  PATH="$SCRIPT_DIR:$PATH" \
+  MOCK_ACPX_SESSION_ENSURE_EXIT=1 \
+  MOCK_ACPX_LOG="$log_file" \
+    bash "$INVOKE" "$config" "$work_dir" "opus-reviewer" 2>/dev/null
+
+  # Should succeed (session ensure was not called, so its failure doesn't matter)
+  [ "$(cat "$work_dir/opus-reviewer-exit.txt")" = "0" ] || return 1
+
+  # sessions ensure should NOT have been called
+  ! grep -q "sessions ensure" "$log_file" 2>/dev/null || return 1
+
+  rm -rf "$work_dir"
+}
+
 # --- Run ---
 
 echo ""
 echo "=== invoke-acpx.sh tests ==="
 echo ""
 
-# Create mock binaries on PATH for acpx and gemini (direct CLI path)
+# Create mock binaries on PATH for acpx, gemini, and claude (direct CLI paths)
 ln -sf "$MOCK" "$SCRIPT_DIR/acpx"
 chmod +x "$SCRIPT_DIR/acpx"
 ln -sf "$MOCK_GEMINI" "$SCRIPT_DIR/gemini"
 chmod +x "$SCRIPT_DIR/gemini"
-trap 'rm -f "$SCRIPT_DIR/acpx" "$SCRIPT_DIR/gemini"' EXIT
+ln -sf "$MOCK_CLAUDE" "$SCRIPT_DIR/claude"
+chmod +x "$SCRIPT_DIR/claude"
+trap 'rm -f "$SCRIPT_DIR/acpx" "$SCRIPT_DIR/gemini" "$SCRIPT_DIR/claude"' EXIT
 
 run_test "happy path" test_happy_path
 run_test "debate prompt file" test_prompt_file_used_for_debate
@@ -507,6 +568,8 @@ run_test "skip session check env" test_skip_session_check_env
 run_test "stderr surfaced on failure" test_stderr_surfaced_on_failure
 run_test "gemini uses direct CLI" test_gemini_uses_direct_cli
 run_test "gemini skips session ensure" test_gemini_skips_session_ensure
+run_test "opus uses direct CLI" test_opus_uses_direct_cli
+run_test "opus skips session ensure" test_opus_skips_session_ensure
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ($(( PASS + FAIL )) total) ==="

@@ -91,7 +91,7 @@ for NAME in "${REVIEWERS[@]}"; do
     bash "$SCRIPT_DIR/invoke-acpx.sh" "$CONFIG_FILE" "$WORK_DIR" "$NAME" "$TIMEOUT" \
     > /dev/null 2>"$WORK_DIR/${NAME}-invoke.log" &
   PIDS+=("$!")
-  disown "${PIDS[-1]}"
+  disown "${PIDS[$((${#PIDS[@]}-1))]}"
   EXIT_FILES+=("$WORK_DIR/${NAME}-exit.txt")
 done
 

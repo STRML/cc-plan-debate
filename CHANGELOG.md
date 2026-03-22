@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.4] — 2026-03-22
+
+### Fixed
+
+- **Bash 3.2 compatibility** — replaced negative array index (`${PIDS[-1]}`) with portable arithmetic expression (`${PIDS[$((${#PIDS[@]}-1))]}`) in `run-parallel-acpx.sh`. Fixes compatibility with macOS default bash (3.2), which does not support negative subscripts.
+
+---
+
 ## [2.0.3] — 2026-03-19
 
 ### Fixed

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.4] — 2026-03-31
+
+### Fixed
+
+- **Full reviewer output reading** — added explicit instructions in `/debate:all` (Steps 3, 4, and Rules) requiring the Read tool on each reviewer's complete output file. Claude was grep-skimming for keywords like "critical|blocker|must fix" instead of reading full reviews, missing 50%+ of findings in practice. Grep/awk/head/tail on reviewer output is now explicitly banned at every synthesis step.
+
+---
+
 ## [2.0.3] — 2026-03-19
 
 ### Fixed

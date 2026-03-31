@@ -108,13 +108,15 @@ Then clean up and exit.
 
 ## Step 3: Present Reviewer Outputs
 
+**CRITICAL: You MUST use the Read tool to read each `<name>-output.md` file IN FULL.** Do NOT use grep, awk, sed, head, tail, or any other tool to extract snippets or search for keywords. Do NOT summarize without reading. Each reviewer catches different issues — skimming loses findings. Read every word.
+
 For each completed reviewer:
 
 ```text
 ---
 ## <Name> Review — Round N (<Agent>)
 
-[content of <name>-output.md]
+[FULL content of <name>-output.md — do not truncate or summarize]
 ```
 
 For failed/timed-out reviewers:
@@ -127,6 +129,8 @@ For failed/timed-out reviewers:
 ---
 
 ## Step 4: Synthesize
+
+**CRITICAL: Do NOT grep reviewer files for keywords like "critical", "blocker", "must fix", etc. to build your synthesis.** You must synthesize from the full text you already read in Step 3. If you did not read the full output in Step 3, go back and do it now before synthesizing.
 
 Read all successful reviewer outputs and categorize:
 
@@ -296,5 +300,6 @@ rm -rf <WORK_DIR>
 - **Timeout:** Each reviewer's timeout is in the config. The runner adds a 60s buffer to MAX_WAIT automatically.
 - **Graceful degradation:** If a reviewer fails, skip it in synthesis. If all fail, return UNDECIDED.
 - **Debate guard:** Skip debate if fewer than 2 reviewers succeeded.
+- **Read fully, never grep-skim.** You MUST read each reviewer's complete output with the Read tool. Never use `grep -A`, `grep -iE`, or keyword extraction to summarize reviews — this reliably misses 50%+ of findings. If you catch yourself reaching for grep on reviewer output, stop and use Read instead.
 - **Revision discipline:** Make real improvements, not cosmetic changes.
 - **User control:** If a revision would contradict the user's explicit requirements, skip it and note it.
